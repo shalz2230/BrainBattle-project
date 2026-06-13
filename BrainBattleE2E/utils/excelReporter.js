@@ -1,9 +1,10 @@
 const Mocha = require('mocha');
 const ExcelJS = require('exceljs');
-const { EVENT_TEST_PASS, EVENT_TEST_FAIL, EVENT_RUN_END } = Mocha.Runner.constants;
+const { EVENT_TEST_PASS, EVENT_TEST_FAIL } = Mocha.Runner.constants;
 
-class ExcelReporter {
-  constructor(runner) {
+class ExcelReporter extends Mocha.reporters.Base {
+  constructor(runner, options) {
+    super(runner, options);
     this.results = [];
 
     runner.on(EVENT_TEST_PASS, (test) => {
@@ -27,8 +28,10 @@ class ExcelReporter {
       });
       console.log(`\x1b[31m[FAIL]\x1b[0m ${test.title}`);
     });
+  }
 
-    runner.on(EVENT_RUN_END, async () => {
+  async done(failures, exit) {
+    try {
       console.log('Generating Excel report...');
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet('Selenium Test Report');
@@ -56,7 +59,13 @@ class ExcelReporter {
 
       await workbook.xlsx.writeFile('selenium-report.xlsx');
       console.log('Excel report saved to selenium-report.xlsx');
-    });
+    } catch (e) {
+      console.error('Failed to generate Excel report:', e);
+    } finally {
+      if (exit) {
+        exit(failures);
+      }
+    }
   }
 }
 

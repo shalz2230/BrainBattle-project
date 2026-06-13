@@ -4,7 +4,7 @@ const chrome = require('selenium-webdriver/chrome');
 async function getDriver() {
   const options = new chrome.Options();
   // Using headless mode for CI/CD compatibility
-  options.addArguments('--headless');
+  options.addArguments('--headless=new');
   options.addArguments('--window-size=1920,1080');
   options.addArguments('--no-sandbox');
   options.addArguments('--disable-dev-shm-usage');

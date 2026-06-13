@@ -25,14 +25,14 @@ jobs:
 
       - name: Start Frontend in Background
         working-directory: ./BrainBattleWeb
-        run: npm run dev &
+        run: npm run dev -- --host 127.0.0.1 &
         env:
           VITE_API_URL: https://brainbattlebackend.onrender.com
 
       - name: Wait for Frontend to be ready
         run: |
           echo "Waiting for frontend..."
-          curl --retry-connrefused --retry 10 --retry-delay 2 -s -o /dev/null http://127.0.0.1:5173 || true
+          npx wait-on http://127.0.0.1:5173 --timeout 30000
 
       - name: Install Test Dependencies
         working-directory: ./BrainBattleE2E
