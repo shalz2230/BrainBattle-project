@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js (Frontend)
+      - name: Set up Node.js (Frontend & Tests)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -34,23 +34,20 @@ jobs:
           echo "Waiting for frontend..."
           curl --retry-connrefused --retry 10 --retry-delay 2 -s -o /dev/null http://127.0.0.1:5173 || true
 
-      - name: Set up Python (for Selenium)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install Test Dependencies
-        run: |
-          pip install selenium pytest pytest-excel webdriver-manager
+        working-directory: ./BrainBattleE2E
+        run: npm install
 
-      - name: Run E2E Selenium Tests & Generate Excel Report
-        run: |
-          pytest tests/ --excelreport=selenium-report.xlsx
+      - name: Run E2E Node.js Selenium Tests (100+ Cases)
+        working-directory: ./BrainBattleE2E
+        run: npm test
+        env:
+          TEST_BASE_URL: http://127.0.0.1:5173
 
       - name: Upload Test Report Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: selenium-test-report
-          path: selenium-report.xlsx
+          path: BrainBattleE2E/selenium-report.xlsx
           retention-days: 7
