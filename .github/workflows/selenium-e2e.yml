@@ -20,13 +20,13 @@ jobs:
           node-version: '20'
 
       - name: Install Frontend Dependencies
-        # Removed working-directory because your code is in the repository root
+        working-directory: ./BrainBattleWeb
         run: npm install
 
       - name: Start Frontend in Background
+        working-directory: ./BrainBattleWeb
         run: npm run dev &
         env:
-          # Your live backend Render URL!
           VITE_API_URL: https://brainbattlebackend.onrender.com
 
       - name: Wait for Frontend to be ready
@@ -40,7 +40,6 @@ jobs:
           python-version: '3.11'
 
       - name: Install Test Dependencies
-        # Added pytest-excel instead of pytest-html to generate an XLSX report
         run: |
           pip install selenium pytest pytest-excel webdriver-manager
 
