@@ -50,7 +50,7 @@ export default function ForgotPassword() {
           <div className="gamified-card-border"></div>
           
           <div className="logo-container">
-            <img src="/logo-removebg-preview.png" alt="Brain Battle" className="auth-logo animated-logo" />
+            <img src="./logo-removebg-preview.png" alt="Brain Battle" className="auth-logo animated-logo" />
             <div className="logo-glow"></div>
           </div>
           

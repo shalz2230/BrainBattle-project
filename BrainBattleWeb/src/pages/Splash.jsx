@@ -26,7 +26,7 @@ export default function Splash() {
       
       <div className="splash fade-in gamified-wrapper" style={{ zIndex: 10 }}>
         <div className="logo-container" style={{ transform: 'scale(1.5)', marginBottom: '40px' }}>
-          <img src="/logo-removebg-preview.png" alt="Brain Battle" className="auth-logo animated-logo" />
+          <img src="./logo-removebg-preview.png" alt="Brain Battle" className="auth-logo animated-logo" />
           <div className="logo-glow"></div>
         </div>
         <h1 className="glitch-text" data-text="Brain Battle" style={{ fontSize: '48px', marginBottom: '10px' }}>Brain Battle</h1>

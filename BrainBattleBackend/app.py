@@ -23,6 +23,14 @@ def create_app():
     # ✅ Init database
     db.init_app(app)
 
+    # ✅ Health check route for the root URL
+    @app.route('/')
+    def index():
+        return {
+            "status": "success",
+            "message": "BrainBattle API is running successfully!"
+        }, 200
+
     # ✅ Register blueprints
     from routes.auth_routes import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
