@@ -1,0 +1,75 @@
+name: E2E Selenium Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (Frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Frontend Dependencies
+        working-directory: ./BrainBattleWeb
+        run: npm install
+
+      - name: Start Frontend in Background
+        working-directory: ./BrainBattleWeb
+        # Running dev server in the background so the workflow can continue
+        run: npm run dev &
+        env:
+          VITE_API_URL: http://127.0.0.1:5000
+
+      - name: Set up Python (Backend)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Backend Dependencies
+        working-directory: ./BrainBattleBackend
+        run: pip install -r requirements.txt
+
+      - name: Start Backend in Background
+        working-directory: ./BrainBattleBackend
+        # Running flask server in the background
+        run: python app.py &
+        env:
+          FLASK_HOST: 127.0.0.1
+          FLASK_PORT: 5000
+          CORS_ORIGINS: "*"
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for backend..."
+          curl --retry-connrefused --retry 10 --retry-delay 2 -s -o /dev/null http://127.0.0.1:5000/api/dashboard/stats || true
+          echo "Waiting for frontend..."
+          curl --retry-connrefused --retry 10 --retry-delay 2 -s -o /dev/null http://127.0.0.1:5173 || true
+
+      - name: Install Test Dependencies
+        # Adjust this depending on your test setup. Assuming Python/pytest + HTML reports here:
+        run: |
+          pip install selenium pytest pytest-html webdriver-manager
+
+      - name: Run E2E Selenium Tests & Generate Report
+        # Replace `tests/` with the actual path to your selenium scripts
+        # Using pytest-html to generate a visual HTML report
+        run: |
+          pytest tests/ --html=selenium-report.html --self-contained-html
+
+      - name: Upload Test Report Artifact
+        if: always() # Ensures the report is uploaded even if tests fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-test-report
+          path: selenium-report.html
+          retention-days: 7
