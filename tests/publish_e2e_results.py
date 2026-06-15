@@ -168,6 +168,26 @@ def main():
     markdown_output.append(f"| **Timestamp** | {get_summary_val(appium_summary, ['Execution Date', 'End Time'])} |")
     markdown_output.append("\n")
     
+    # Module-wise Summary: E2E
+    markdown_output.append("### 📊 E2E Web Module-wise Summary")
+    markdown_output.append("| Module | Total | Passed | Failed | Pass Rate |")
+    markdown_output.append("|---|---|---|---|---|")
+    module_stats = {}
+    for r in e2e_details:
+        mod = get_detail_val(r, ['Category', 'Module / Feature', 'Module'], 'Uncategorized')
+        st = str(get_detail_val(r, ['Status', 'Result'])).upper()
+        if mod not in module_stats:
+            module_stats[mod] = {'total': 0, 'pass': 0, 'fail': 0}
+        module_stats[mod]['total'] += 1
+        if 'PASS' in st or st == 'OK':
+            module_stats[mod]['pass'] += 1
+        else:
+            module_stats[mod]['fail'] += 1
+    for mod, stats in module_stats.items():
+        rate = (stats['pass'] / stats['total']) * 100
+        markdown_output.append(f"| **{mod}** | {stats['total']} | ✅ {stats['pass']} | ❌ {stats['fail']} | **{rate:.1f}%** |")
+    markdown_output.append("\n")
+
     # Expandable Details: E2E
     markdown_output.append("### 🔍 E2E Web Test Cases Detail Breakdowns")
     markdown_output.append(f"<details><summary>Click to view all E2E Web Test Cases ({len(e2e_details)} tests)</summary>\n")
@@ -182,6 +202,26 @@ def main():
         markdown_output.append(f"| {no} | {category} | `{test_name}` | {status_emoji} |")
     markdown_output.append("\n</details>\n")
     
+    # Module-wise Summary: Appium
+    markdown_output.append("### 📊 Appium Mobile Module-wise Summary")
+    markdown_output.append("| Module | Total | Passed | Failed | Pass Rate |")
+    markdown_output.append("|---|---|---|---|---|")
+    appium_module_stats = {}
+    for r in appium_details:
+        mod = get_detail_val(r, ['Module', 'Category'], 'Uncategorized')
+        st = str(get_detail_val(r, ['Status', 'Result'])).upper()
+        if mod not in appium_module_stats:
+            appium_module_stats[mod] = {'total': 0, 'pass': 0, 'fail': 0}
+        appium_module_stats[mod]['total'] += 1
+        if 'PASS' in st or st == 'OK':
+            appium_module_stats[mod]['pass'] += 1
+        else:
+            appium_module_stats[mod]['fail'] += 1
+    for mod, stats in appium_module_stats.items():
+        rate = (stats['pass'] / stats['total']) * 100
+        markdown_output.append(f"| **{mod}** | {stats['total']} | ✅ {stats['pass']} | ❌ {stats['fail']} | **{rate:.1f}%** |")
+    markdown_output.append("\n")
+
     # Expandable Details: Appium
     markdown_output.append("### 🔍 Appium Mobile Test Cases Detail Breakdowns")
     markdown_output.append(f"<details><summary>Click to view all Appium Mobile Test Cases ({len(appium_details)} tests)</summary>\n")
@@ -212,3 +252,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
