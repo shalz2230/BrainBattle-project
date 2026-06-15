@@ -1,0 +1,36 @@
+name: BrainBattle Backend Security Verification
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  backend-security:
+    name: Backend Security & Structure Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Backend Security Verification
+        run: python BrainBattleBackend/scripts/security_verify.py
+        env:
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainbattle-security-report
+          path: BrainBattleBackend/scripts/security_report.json
+          if-no-files-found: ignore
+          retention-days: 30

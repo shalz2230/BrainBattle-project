@@ -1,28 +1,19 @@
-name: pages build and deployment
+name: BrainBattle Frontend Build Verification
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
-# Required permissions for GitHub Pages deployment
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Only one Pages deployment at a time
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
-  build:
-    name: Build Vite App
+  build-verify:
+    name: Frontend Build & Quality Check
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -32,36 +23,39 @@ jobs:
           cache: 'npm'
           cache-dependency-path: BrainBattleWeb/package-lock.json
 
-      - name: Install dependencies
+      - name: Install Frontend Dependencies
         working-directory: BrainBattleWeb
-        run: npm ci
+        run: npm install
 
-      - name: Build app for production
+      - name: Build BrainBattleWeb (Vite)
         working-directory: BrainBattleWeb
         run: npm run build
         env:
-          NODE_ENV: production
           VITE_API_URL: https://brainbattlewebbackend.onrender.com
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Verify Build Output
+        run: |
+          echo "## 🏗️ Frontend Build Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -d "BrainBattleWeb/dist" ]; then
+            echo "✅ **Build succeeded!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            FILE_COUNT=$(find BrainBattleWeb/dist -type f | wc -l)
+            TOTAL_SIZE=$(du -sh BrainBattleWeb/dist | cut -f1)
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 📁 Total Files | $FILE_COUNT |" >> $GITHUB_STEP_SUMMARY
+            echo "| 💾 Bundle Size | $TOTAL_SIZE |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🌐 Deploy Target | GitHub Pages (brainbattlewebfrontend) |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Build output not found" >> $GITHUB_STEP_SUMMARY
+          fi
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Build Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          # Upload the Vite dist folder
+          name: brainbattle-frontend-dist
           path: BrainBattleWeb/dist
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          if-no-files-found: warn
+          retention-days: 7
