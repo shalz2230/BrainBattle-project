@@ -171,10 +171,17 @@ jobs:
 
           echo "Running Full E2E Tests..."
           cd ../BrainBattleE2E
+          set +e
           node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js
-          mv selenium-report.xlsx full-e2e-report.xlsx
+          TEST_EXIT_CODE=$?
+          set -e
+
+          if [ -f selenium-report.xlsx ]; then
+            cp selenium-report.xlsx full-e2e-report.xlsx
+          fi
 
           echo "Hosted E2E run complete."
+          exit $TEST_EXIT_CODE
 
       # ── Upload Artifacts ──────────────────────────────────────
       - name: 📤 Artifact — Full E2E Report
@@ -184,6 +191,7 @@ jobs:
           name: Web-Full-E2E-Report
           path: |
             BrainBattleE2E/full-e2e-report.xlsx
+            BrainBattleE2E/selenium-report.xlsx
             BrainBattleE2E/web_results.json
             BrainBattleE2E/test-artifacts
           retention-days: 30
