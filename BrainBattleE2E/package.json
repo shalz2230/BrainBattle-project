@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js",
+    "test:coverage100": "mocha tests/coverage_100.test.js --timeout 240000 --reporter ./utils/excelReporter.js",
     "test:flow": "mocha tests/functional.test.js --timeout 240000 --reporter spec",
     "test:flow:slow": "mocha tests/functional.test.js --timeout 240000 --reporter spec",
     "test:ui": "mocha tests/ui_ux.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
