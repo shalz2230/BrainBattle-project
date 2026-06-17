@@ -2,7 +2,7 @@ const { expect } = require('chai');
 const { By, until, Key } = require('selenium-webdriver');
 const { getDriver, pause } = require('../utils/driverSetup');
 
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5173/BrainBattle-project/brainbattlewebfrontend';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
 const TEST_EMAIL = process.env.TEST_EMAIL || 'test@brainbattle.com';
 const TEST_PASS = process.env.TEST_PASS || 'test1234';
 

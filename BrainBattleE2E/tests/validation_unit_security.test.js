@@ -2,7 +2,7 @@ const { expect } = require('chai');
 const { By, until, Key } = require('selenium-webdriver');
 const { getDriver } = require('../utils/driverSetup');
 
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5173/BrainBattle-project/brainbattlewebfrontend';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
 
 describe('Validation & Security Suite (35 Tests)', function () {
   this.timeout(180000); // 3 minutes

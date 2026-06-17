@@ -2,7 +2,7 @@ const { expect } = require('chai');
 const { By, until } = require('selenium-webdriver');
 const { getDriver } = require('../utils/driverSetup');
 
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5173/BrainBattle-project/brainbattlewebfrontend';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
 
 describe('Games & Navigation Flow (5 Tests)', function () {
   this.timeout(120000); 
