@@ -3,9 +3,6 @@ name: 📱 Android Tests — JUnit + Espresso
 on:
   push:
     branches: ["main", "master"]
-    paths:
-      - "BrainBattle/**"
-      - ".github/workflows/android_tests.yml"
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:

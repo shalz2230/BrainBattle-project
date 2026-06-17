@@ -3,11 +3,6 @@ name: 🌐 Web App Tests — Selenium + Unit
 on:
   push:
     branches: ["main", "master"]
-    paths:
-      - "BrainBattleWeb/**"
-      - "BrainBattleBackend/**"
-      - "BrainBattleE2E/**"
-      - ".github/workflows/web_tests.yml"
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:
