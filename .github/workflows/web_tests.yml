@@ -34,17 +34,15 @@ jobs:
       - name: 🔬 Run Unit Tests (no browser needed)
         working-directory: BrainBattleE2E
         run: |
-          npx mocha tests/validation_unit_security.test.js \
+          node ./node_modules/mocha/bin/mocha.js tests/validation_unit_security.test.js \
             --timeout 30000 \
             --grep "Unit Tests" \
             --reporter json \
-            --reporter-option output=unit-test-results.json \
-            || true
-          npx mocha tests/validation_unit_security.test.js \
+            --reporter-option output=unit-test-results.json
+          node ./node_modules/mocha/bin/mocha.js tests/validation_unit_security.test.js \
             --timeout 30000 \
             --grep "Unit Tests" \
             --reporter spec
-        continue-on-error: true
 
   # ─────────────────────────────────────────────────────────────
   # JOB 2: Backend Startup + Selenium E2E Tests
@@ -168,13 +166,12 @@ jobs:
 
           echo "Running Full E2E Tests..."
           cd ../BrainBattleE2E
-          npx mocha tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js || true
-          mv selenium-report.xlsx full-e2e-report.xlsx 2>/dev/null || true
+          node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js
+          mv selenium-report.xlsx full-e2e-report.xlsx
 
           echo "Stopping Servers..."
           kill $VITE_PID || true
           kill $BACKEND_PID || true
-        continue-on-error: true
 
       # ── Upload Artifacts ──────────────────────────────────────
       - name: 📤 Artifact — Full E2E Report
