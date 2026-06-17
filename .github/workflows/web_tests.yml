@@ -107,34 +107,6 @@ jobs:
               print(f"✅ Seeded {User.query.count()} user(s)")
           EOF
 
-      - name: 🚀 Start Flask Backend
-        working-directory: BrainBattleBackend
-        env:
-          SECRET_KEY: "ci-test-secret-key"
-          CORS_ORIGINS: "*"
-          FLASK_DEBUG: "false"
-          FLASK_HOST: "127.0.0.1"
-          FLASK_PORT: "5000"
-        run: |
-          python app.py &
-          echo "BACKEND_PID=$!" >> $GITHUB_ENV
-          for i in $(seq 1 15); do
-            sleep 2
-            curl -sf http://127.0.0.1:5000/ > /dev/null 2>&1 && \
-              echo "✅ Backend up (attempt $i)" && break
-            echo "⏳ attempt $i..."
-          done
-          curl -sf http://127.0.0.1:5000/ || (echo "❌ Backend failed" && exit 1)
-
-      - name: 🔐 Smoke-test Login API
-        run: |
-          R=$(curl -sf -X POST http://127.0.0.1:5000/api/auth/login \
-               -H "Content-Type: application/json" \
-               -d '{"email":"test@brainbattle.com","password":"test1234"}')
-          echo "Response: $R"
-          echo "$R" | grep -q '"status":"success"' && \
-            echo "✅ Login OK" || (echo "❌ Login failed" && exit 1)
-
       # ── Node + React Web App ──────────────────────────────────
       - name: 🟢 Setup Node.js 20
         uses: actions/setup-node@v4
@@ -152,21 +124,7 @@ jobs:
         env:
           VITE_API_URL: "http://127.0.0.1:5000"
         run: |
-          # Override base to / so the preview server works at http://127.0.0.1:5173/
           npx vite build --base /
-
-      - name: 🚀 Start Vite Preview
-        working-directory: BrainBattleWeb
-        run: |
-          npx vite preview --host 127.0.0.1 --port 5173 --base / &
-          echo "VITE_PID=$!" >> $GITHUB_ENV
-          for i in $(seq 1 10); do
-            sleep 2
-            curl -sf http://127.0.0.1:5173/ > /dev/null 2>&1 && \
-              echo "✅ Vite up (attempt $i)" && break
-            echo "⏳ attempt $i..."
-          done
-          curl -sf http://127.0.0.1:5173/ || (echo "❌ Vite failed" && exit 1)
 
       # ── Chrome ────────────────────────────────────────────────
       - name: 🌐 Setup Chrome
@@ -181,118 +139,49 @@ jobs:
         working-directory: BrainBattleE2E
         run: npm install
 
-      # ── Run Each Category ─────────────────────────────────────
-      - name: 🎨 TC-W-UI-001..025 — UI/UX Tests
+      # ── Start Servers & Run E2E Tests ─────────────────────────
+      - name: 🚀 Start Servers & Run Full E2E Tests
         working-directory: BrainBattleE2E
         env:
+          SECRET_KEY: "ci-test-secret-key"
+          CORS_ORIGINS: "*"
+          FLASK_DEBUG: "false"
+          FLASK_HOST: "127.0.0.1"
+          FLASK_PORT: "5000"
           TEST_BASE_URL: "http://127.0.0.1:5173"
           TEST_EMAIL: "test@brainbattle.com"
           TEST_PASS: "test1234"
           API_URL: "http://127.0.0.1:5000"
           GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
-          npx mocha tests/ui_ux.test.js --timeout 90000 \
-            --reporter ./utils/excelReporter.js || true
-          mv selenium-report.xlsx ui-ux-report.xlsx 2>/dev/null || true
-        continue-on-error: true
+          echo "Starting Flask Backend..."
+          cd ../BrainBattleBackend
+          python app.py &
+          BACKEND_PID=$!
+          for i in $(seq 1 15); do sleep 2; curl -sf http://127.0.0.1:5000/ > /dev/null 2>&1 && break; done
 
-      - name: ⚙️ TC-W-F-001..030 — Functional Tests
-        working-directory: BrainBattleE2E
-        env:
-          TEST_BASE_URL: "http://127.0.0.1:5173"
-          TEST_EMAIL: "test@brainbattle.com"
-          TEST_PASS: "test1234"
-          API_URL: "http://127.0.0.1:5000"
-          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
-        run: |
-          npx mocha tests/functional.test.js --timeout 90000 \
-            --reporter ./utils/excelReporter.js || true
-          mv selenium-report.xlsx functional-report.xlsx 2>/dev/null || true
-        continue-on-error: true
+          echo "Starting Vite Frontend..."
+          cd ../BrainBattleWeb
+          npx vite preview --host 127.0.0.1 --port 5173 --base / &
+          VITE_PID=$!
+          for i in $(seq 1 10); do sleep 2; curl -sf http://127.0.0.1:5173/ > /dev/null 2>&1 && break; done
 
-      - name: ✅ TC-W-V-001..015 — Validation Tests
-        working-directory: BrainBattleE2E
-        env:
-          TEST_BASE_URL: "http://127.0.0.1:5173"
-          TEST_EMAIL: "test@brainbattle.com"
-          TEST_PASS: "test1234"
-          API_URL: "http://127.0.0.1:5000"
-          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
-        run: |
-          npx mocha tests/validation_unit_security.test.js \
-            --grep "Validation Test Suite" --timeout 90000 \
-            --reporter ./utils/excelReporter.js || true
-          mv selenium-report.xlsx validation-report.xlsx 2>/dev/null || true
-        continue-on-error: true
+          echo "Running Full E2E Tests..."
+          cd ../BrainBattleE2E
+          npx mocha tests/e2e_all_100.test.js --timeout 180000 --reporter ./utils/excelReporter.js || true
+          mv selenium-report.xlsx full-e2e-report.xlsx 2>/dev/null || true
 
-      - name: 🛡️ TC-W-SEC-001..010 — Security Tests
-        working-directory: BrainBattleE2E
-        env:
-          TEST_BASE_URL: "http://127.0.0.1:5173"
-          TEST_EMAIL: "test@brainbattle.com"
-          TEST_PASS: "test1234"
-          API_URL: "http://127.0.0.1:5000"
-          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
-        run: |
-          npx mocha tests/validation_unit_security.test.js \
-            --grep "Security" --timeout 90000 \
-            --reporter ./utils/excelReporter.js || true
-          mv selenium-report.xlsx security-report.xlsx 2>/dev/null || true
+          echo "Stopping Servers..."
+          kill $VITE_PID || true
+          kill $BACKEND_PID || true
         continue-on-error: true
 
       # ── Upload Artifacts ──────────────────────────────────────
-      - name: 📤 Artifact — UI/UX Report
+      - name: 📤 Artifact — Full E2E Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Web-UIUX-Test-Report
-          path: BrainBattleE2E/ui-ux-report.xlsx
+          name: Web-Full-E2E-Report
+          path: BrainBattleE2E/full-e2e-report.xlsx
           retention-days: 30
           if-no-files-found: ignore
-
-      - name: 📤 Artifact — Functional Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Web-Functional-Test-Report
-          path: BrainBattleE2E/functional-report.xlsx
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: 📤 Artifact — Validation Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Web-Validation-Test-Report
-          path: BrainBattleE2E/validation-report.xlsx
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: 📤 Artifact — Security Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Web-Security-Test-Report
-          path: BrainBattleE2E/security-report.xlsx
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: 📤 Upload Combined Full Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Web-Full-Test-Report-ALL
-          path: |
-            BrainBattleE2E/ui-ux-report.xlsx
-            BrainBattleE2E/functional-report.xlsx
-            BrainBattleE2E/validation-report.xlsx
-            BrainBattleE2E/security-report.xlsx
-          retention-days: 30
-          if-no-files-found: ignore
-
-      # ── 8. Cleanup ─────────────────────────────────────────────
-      - name: 🧹 Stop Background Servers
-        if: always()
-        run: |
-          kill $BACKEND_PID 2>/dev/null || true
-          kill $VITE_PID    2>/dev/null || true
