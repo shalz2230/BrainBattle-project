@@ -148,7 +148,7 @@ jobs:
           FLASK_DEBUG: "false"
           FLASK_HOST: "127.0.0.1"
           FLASK_PORT: "5000"
-          TEST_BASE_URL: "http://localhost:5173/brainbattlewebfrontend/"
+          TEST_BASE_URL: "http://localhost:5173/BrainBattle-project/brainbattlewebfrontend"
           TEST_EMAIL: "test@brainbattle.com"
           TEST_PASS: "test1234"
           API_URL: "http://127.0.0.1:5000"
@@ -164,7 +164,7 @@ jobs:
           cd ../BrainBattleWeb
           npx vite preview --host 127.0.0.1 --port 5173 --base / &
           VITE_PID=$!
-          for i in $(seq 1 10); do sleep 2; curl -sf http://localhost:5173/brainbattlewebfrontend/ > /dev/null 2>&1 && break; done
+          for i in $(seq 1 10); do sleep 2; curl -sf http://localhost:5173/BrainBattle-project/brainbattlewebfrontend > /dev/null 2>&1 && break; done
 
           echo "Running Full E2E Tests..."
           cd ../BrainBattleE2E
