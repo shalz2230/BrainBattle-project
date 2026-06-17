@@ -29,6 +29,13 @@ $env:TEST_PASS     = "test1234"
 $env:API_URL       = "https://brainbattlewebbackend.onrender.com"
 ```
 
+### Test the hosted GitHub Pages frontend
+```powershell
+$env:TEST_BASE_URL = "https://shalz2230.github.io/brainbattlewebfrontend/"
+npm run test:flow
+```
+Use this when you want Selenium to validate the deployed frontend instead of your local Vite server.
+
 ### Run All 100 Web Tests (→ produces selenium-report.xlsx)
 ```powershell
 npm run test:all-excel
