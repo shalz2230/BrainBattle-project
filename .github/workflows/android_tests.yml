@@ -97,13 +97,10 @@ jobs:
           avd-name: test_avd
           disable-animations: true
           script: |
-            cd BrainBattleAppium
-            # Start Appium server in background
-            npx appium &
-            # Wait for Appium to start
+            cd BrainBattleAppium && npx appium driver install uiautomator2
+            cd BrainBattleAppium && npx appium &
             sleep 10
-            # Run wdio tests
-            npm run test || true
+            cd BrainBattleAppium && npm run test || true
 
       - name: 📊 Upload Appium Log / Report
         if: always()
