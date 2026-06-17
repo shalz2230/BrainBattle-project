@@ -8,6 +8,7 @@ async function getDriver() {
   const isHeadless = process.env.SELENIUM_HEADLESS === 'true';
   const visualDelayMs = Number(process.env.SELENIUM_STEP_DELAY_MS || 0);
   const chromeBinary = process.env.CHROME_BIN || process.env.GOOGLE_CHROME_BIN;
+  const chromeDriverPath = process.env.CHROMEDRIVER_PATH;
 
   if (isHeadless) {
     options.addArguments('--headless=new');
@@ -30,10 +31,15 @@ async function getDriver() {
     options.addArguments('--start-maximized');
   }
 
-  const driver = await new Builder()
+  const builder = new Builder()
     .forBrowser('chrome')
-    .setChromeOptions(options)
-    .build();
+    .setChromeOptions(options);
+
+  if (chromeDriverPath) {
+    builder.setChromeService(new chrome.ServiceBuilder(chromeDriverPath));
+  }
+
+  const driver = await builder.build();
 
   if (!isHeadless) {
     await driver.manage().window().maximize();

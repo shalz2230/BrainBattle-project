@@ -134,6 +134,10 @@ jobs:
       - name: 🔧 Setup ChromeDriver
         uses: nanasess/setup-chromedriver@v2
 
+      - name: Locate ChromeDriver
+        id: chromedriver
+        run: echo "path=$(which chromedriver)" >> "$GITHUB_OUTPUT"
+
       - name: 📦 Install E2E Test Dependencies
         working-directory: BrainBattleE2E
         run: npm install
@@ -156,6 +160,7 @@ jobs:
           API_URL: "https://brainbattlewebbackend.onrender.com"
           SELENIUM_HEADLESS: "true"
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chromedriver.outputs.path }}
           GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
           echo "Checking hosted backend..."
