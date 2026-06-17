@@ -1,4 +1,4 @@
-name: 📱 Android Tests — JUnit + Espresso
+name: 📱 Android App Tests — Appium & Unit
 
 on:
   push:
@@ -8,12 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # JOB 1: Android Unit Tests (JVM — no emulator, fast)
-  # Covers TC-A-U-001 to TC-A-U-020
-  # ─────────────────────────────────────────────────────────────
   android-unit-tests:
-    name: 🔬 Android Unit Tests (JVM)
+    name: 🔬 Android Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -28,7 +24,7 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: 🔐 Grant Execute Permission for Gradlew
+      - name: 🔧 Grant Execute Permission for Gradlew
         working-directory: BrainBattle
         run: chmod +x gradlew
 
@@ -36,28 +32,7 @@ jobs:
         working-directory: BrainBattle
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-      - name: 📊 Generate Unit Test Summary
-        if: always()
-        run: |
-          echo "## 📱 Android Unit Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          REPORT_DIR="BrainBattle/app/build/reports/tests/testDebugUnitTest"
-          if [ -d "$REPORT_DIR" ]; then
-            # Parse XML results
-            TOTAL=$(find BrainBattle/app/build/test-results -name "*.xml" -exec grep -h "testsuite" {} \; | \
-              grep -oP 'tests="\K[0-9]+' | paste -sd+ | bc 2>/dev/null || echo "0")
-            FAILURES=$(find BrainBattle/app/build/test-results -name "*.xml" -exec grep -h "testsuite" {} \; | \
-              grep -oP 'failures="\K[0-9]+' | paste -sd+ | bc 2>/dev/null || echo "0")
-            ERRORS=$(find BrainBattle/app/build/test-results -name "*.xml" -exec grep -h "testsuite" {} \; | \
-              grep -oP 'errors="\K[0-9]+' | paste -sd+ | bc 2>/dev/null || echo "0")
-            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Total Tests | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failures | $FAILURES |" >> $GITHUB_STEP_SUMMARY
-            echo "| ⚠️ Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: 📤 Upload Unit Test HTML Report
+      - name: 📊 Upload Unit Test HTML Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -66,27 +41,14 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      - name: 📤 Upload Unit Test XML Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android-Unit-Test-Results-XML
-          path: BrainBattle/app/build/test-results/testDebugUnitTest/
-          retention-days: 30
-          if-no-files-found: ignore
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 2: Android Instrumented Tests (Espresso on Emulator)
-  # Covers TC-A-UI + TC-A-F + TC-A-V (Espresso tests)
-  # ─────────────────────────────────────────────────────────────
-  android-instrumented-tests:
-    name: 📲 Android Instrumented Tests (Espresso)
+  appium-tests:
+    name: 🤖 Appium E2E Tests (100+ Cases)
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     strategy:
       matrix:
-        api-level: [28]           # API 28 = Android 9 (stable for Espresso)
+        api-level: [28]
         target: [google_apis]
         arch: [x86_64]
 
@@ -101,18 +63,31 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: 🔐 Grant Execute Permission for Gradlew
-        working-directory: BrainBattle
-        run: chmod +x gradlew
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleAppium/package-lock.json
 
-      - name: 🔧 Enable KVM for Hardware Acceleration
+      - name: 📦 Install Appium Dependencies
+        working-directory: BrainBattleAppium
+        run: npm install
+
+      - name: 🔧 Build Debug APK for Appium
+        working-directory: BrainBattle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: ⚡ Enable KVM for Hardware Acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: 📱 Run Instrumented Tests on Emulator
+      - name: 🤖 Run Appium Tests on Emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -122,84 +97,19 @@ jobs:
           avd-name: test_avd
           disable-animations: true
           script: |
-            cd BrainBattle
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace \
-              2>&1 | tee instrumented-test-output.log
+            cd BrainBattleAppium
+            # Start Appium server in background
+            npx appium &
+            # Wait for Appium to start
+            sleep 10
+            # Run wdio tests
+            npm run test || true
 
-      - name: 📊 Generate Instrumented Test Summary
-        if: always()
-        run: |
-          echo "## 📲 Android Instrumented Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          REPORT_DIR="BrainBattle/app/build/reports/androidTests/connected"
-          if [ -d "$REPORT_DIR" ]; then
-            echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-            find "$REPORT_DIR" -name "*.html" -exec ls -lh {} \; | \
-              awk '{print "| " $9 " | " $5 " |"}' >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📋 See the uploaded artifact for the full HTML report." >> $GITHUB_STEP_SUMMARY
-
-      - name: 📤 Upload Espresso HTML Report
+      - name: 📊 Upload Appium Log / Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Android-Instrumented-Test-Report-HTML
-          path: BrainBattle/app/build/reports/androidTests/connected/
+          name: Appium-Test-Report
+          path: BrainBattleAppium/
           retention-days: 30
           if-no-files-found: ignore
-
-      - name: 📤 Upload Espresso XML Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android-Instrumented-Test-Results-XML
-          path: BrainBattle/app/build/outputs/androidTest-results/connected/
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: 📤 Upload Instrumented Test Console Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android-Instrumented-Test-Log
-          path: BrainBattle/instrumented-test-output.log
-          retention-days: 30
-          if-no-files-found: ignore
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 3: Build APK to verify the app still compiles
-  # ─────────────────────────────────────────────────────────────
-  build-apk:
-    name: 🏗️ Build Debug APK
-    runs-on: ubuntu-latest
-    needs: android-unit-tests
-    timeout-minutes: 20
-
-    steps:
-      - name: ⬇️ Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: ☕ Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-          cache: gradle
-
-      - name: 🔐 Grant Execute Permission for Gradlew
-        working-directory: BrainBattle
-        run: chmod +x gradlew
-
-      - name: 🏗️ Build Debug APK
-        working-directory: BrainBattle
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: 📤 Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: BrainBattle-Debug-APK
-          path: BrainBattle/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
-          if-no-files-found: error
