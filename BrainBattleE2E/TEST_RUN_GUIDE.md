@@ -23,7 +23,7 @@ npm install
 
 ### Environment Variables (optional)
 ```powershell
-$env:TEST_BASE_URL = "http://127.0.0.1:5173"
+$env:TEST_BASE_URL = "http://localhost:5173/brainbattlewebfrontend/"
 $env:TEST_EMAIL    = "test@brainbattle.com"
 $env:TEST_PASS     = "test1234"
 $env:API_URL       = "https://brainbattlewebbackend.onrender.com"
@@ -33,6 +33,13 @@ $env:API_URL       = "https://brainbattlewebbackend.onrender.com"
 ```powershell
 npm run test:all-excel
 ```
+
+### Run the visible step-by-step browser flow
+```powershell
+$env:SELENIUM_STEP_DELAY_MS = "750"
+npm run test:flow
+```
+This uses Chrome in normal headed mode and slows the journey down so you can watch each step.
 
 ### Run by Category
 | Command | Tests Run | Count |
@@ -44,6 +51,7 @@ npm run test:all-excel
 | `npm run test:security` | Security Tests (TC-W-SEC-001..010) | 10 |
 | `npm run test:games` | Game loading Tests | 44 |
 | `npm run test:nav` | Navigation Tests | 14 |
+| `npm run test:flow` | Visible signup/login/home/profile journey | 15 |
 | `npm test` | All tests (full Excel report) | 100+ |
 
 ---

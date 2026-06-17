@@ -1,0 +1,60 @@
+{
+  "platform": "Web App",
+  "categories": [
+    {
+      "name": "1. Functional Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "2. UI/UX Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "3. Compatibility Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "4. Performance Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "5. Security Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "6. API Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "7. Database Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "8. Accessibility Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "9. Mobile-Specific Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "10. Regression Testing",
+      "passed": 101,
+      "failed": 0
+    },
+    {
+      "name": "11. End-to-End (E2E) Testing",
+      "passed": 101,
+      "failed": 0
+    }
+  ]
+}

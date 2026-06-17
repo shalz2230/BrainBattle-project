@@ -2,7 +2,7 @@ const { expect } = require('chai');
 const { By, until } = require('selenium-webdriver');
 const { getDriver } = require('../utils/driverSetup');
 
-const BASE_URL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5173';
+const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5173/brainbattlewebfrontend/';
 
 describe('Navigation & Profile Suite', function () {
   this.timeout(60000);

@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js",
+    "test:flow": "mocha tests/functional.test.js --timeout 240000 --reporter spec",
+    "test:flow:slow": "mocha tests/functional.test.js --timeout 240000 --reporter spec",
     "test:ui": "mocha tests/ui_ux.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
     "test:functional": "mocha tests/functional.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
     "test:unit": "mocha tests/validation_unit_security.test.js --timeout 90000 --grep 'Unit Tests' --reporter spec",
@@ -24,4 +26,4 @@
     "mocha": "^11.7.6",
     "selenium-webdriver": "^4.44.0"
   }
-}
+}

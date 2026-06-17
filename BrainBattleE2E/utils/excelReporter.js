@@ -6,10 +6,14 @@ class ExcelReporter extends Mocha.reporters.Base {
   constructor(runner, options) {
     super(runner, options);
     this.results = [];
+    this.typeBySuite = new Map();
 
     runner.on(EVENT_TEST_PASS, (test) => {
+      const testingType = this.inferTestingType(test);
+      this.typeBySuite.set(test.parent.title, testingType);
       this.results.push({
         Suite: test.parent.title,
+        TestingType: testingType,
         TestName: test.title,
         Status: 'PASSED',
         Duration: `${test.duration || 0}ms`,
@@ -19,8 +23,11 @@ class ExcelReporter extends Mocha.reporters.Base {
     });
 
     runner.on(EVENT_TEST_FAIL, (test, err) => {
+      const testingType = this.inferTestingType(test);
+      this.typeBySuite.set(test.parent.title, testingType);
       this.results.push({
         Suite: test.parent.title,
+        TestingType: testingType,
         TestName: test.title,
         Status: 'FAILED',
         Duration: `${test.duration || 0}ms`,
@@ -30,21 +37,38 @@ class ExcelReporter extends Mocha.reporters.Base {
     });
   }
 
+  inferTestingType(test) {
+    const suite = `${test.parent?.title || ''} ${test.parent?.parent?.title || ''}`.toLowerCase();
+    if (suite.includes('functional')) return 'Functional';
+    if (suite.includes('ui/ux') || suite.includes('uiux')) return 'UI/UX';
+    if (suite.includes('compatibility')) return 'Compatibility';
+    if (suite.includes('performance')) return 'Performance';
+    if (suite.includes('security')) return 'Security';
+    if (suite.includes('api')) return 'API';
+    if (suite.includes('database')) return 'Database';
+    if (suite.includes('accessibility')) return 'Accessibility';
+    if (suite.includes('mobile')) return 'Mobile';
+    if (suite.includes('regression')) return 'Regression';
+    if (suite.includes('end-to-end') || suite.includes('e2e')) return 'End-to-End';
+    return 'General';
+  }
+
   async done(failures, exit) {
     try {
       console.log('Generating Excel report...');
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet('Selenium Test Report');
+      const summarySheet = workbook.addWorksheet('Testing Types Summary');
 
       sheet.columns = [
         { header: 'Suite', key: 'Suite', width: 30 },
+        { header: 'Testing Type', key: 'TestingType', width: 20 },
         { header: 'Test Name', key: 'TestName', width: 50 },
         { header: 'Status', key: 'Status', width: 15 },
         { header: 'Duration', key: 'Duration', width: 15 },
         { header: 'Error', key: 'Error', width: 60 }
       ];
 
-      // Style header
       sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
       sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF000000' } };
 
@@ -57,25 +81,54 @@ class ExcelReporter extends Mocha.reporters.Base {
         }
       });
 
+      const typeStats = new Map();
+      this.results.forEach((res) => {
+        const current = typeStats.get(res.TestingType) || {
+          testingType: res.TestingType,
+          total: 0,
+          passed: 0,
+          failed: 0
+        };
+        current.total += 1;
+        if (res.Status === 'PASSED') current.passed += 1;
+        else current.failed += 1;
+        typeStats.set(res.TestingType, current);
+      });
+
+      summarySheet.columns = [
+        { header: 'Testing Type', key: 'testingType', width: 24 },
+        { header: 'Total Tests', key: 'total', width: 14 },
+        { header: 'Passed', key: 'passed', width: 14 },
+        { header: 'Failed', key: 'failed', width: 14 }
+      ];
+      summarySheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      summarySheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF000000' } };
+      Array.from(typeStats.values()).forEach((row) => summarySheet.addRow(row));
+
       await workbook.xlsx.writeFile('selenium-report.xlsx');
       console.log('Excel report saved to selenium-report.xlsx');
 
-      // Write to GitHub Actions Step Summary if running in CI
       if (process.env.GITHUB_STEP_SUMMARY) {
         const fs = require('fs');
         let summaryMd = '## E2E Selenium Test Results\n\n';
         summaryMd += `**Total Tests:** ${this.results.length} | **Failed:** ${failures}\n\n`;
-        summaryMd += '| Status | Suite | Test Name | Duration |\n';
-        summaryMd += '|--------|-------|-----------|----------|\n';
-        
-        this.results.forEach(res => {
-          const statusIcon = res.Status === 'PASSED' ? '✅' : '❌';
-          summaryMd += `| ${statusIcon} ${res.Status} | ${res.Suite} | ${res.TestName} | ${res.Duration} |\n`;
+        summaryMd += '### Testing Types Performed\n\n';
+        summaryMd += '| Testing Type | Total | Passed | Failed |\n';
+        summaryMd += '|-------------|------:|-------:|------:|\n';
+        Array.from(typeStats.values()).forEach((row) => {
+          summaryMd += `| ${row.testingType} | ${row.total} | ${row.passed} | ${row.failed} |\n`;
         });
-        
+        summaryMd += '\n### Test Results\n\n';
+        summaryMd += '| Status | Suite | Testing Type | Test Name | Duration |\n';
+        summaryMd += '|--------|-------|-------------|-----------|----------|\n';
+
+        this.results.forEach((res) => {
+          const statusIcon = res.Status === 'PASSED' ? '✅' : '❌';
+          summaryMd += `| ${statusIcon} ${res.Status} | ${res.Suite} | ${res.TestingType} | ${res.TestName} | ${res.Duration} |\n`;
+        });
+
         fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryMd);
       }
-
     } catch (e) {
       console.error('Failed to generate Excel report:', e);
     } finally {
