@@ -72,7 +72,9 @@ jobs:
 
       - name: 📦 Install Appium Dependencies
         working-directory: BrainBattleAppium
-        run: npm install
+        run: |
+          npm install
+          npm install -g appium
 
       - name: 🔧 Build Debug APK for Appium
         working-directory: BrainBattle
@@ -97,8 +99,8 @@ jobs:
           avd-name: test_avd
           disable-animations: true
           script: |
-            cd BrainBattleAppium && npx appium driver install uiautomator2
-            cd BrainBattleAppium && npx appium &
+            appium driver install uiautomator2
+            appium &
             sleep 10
             cd BrainBattleAppium && npm run test || true
 
