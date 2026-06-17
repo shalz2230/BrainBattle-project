@@ -120,7 +120,7 @@ jobs:
       - name: 🏗️ Build Web App (base = / for CI)
         working-directory: BrainBattleWeb
         env:
-          VITE_API_URL: "http://127.0.0.1:5000"
+          VITE_API_URL: "https://brainbattlewebbackend.onrender.com"
         run: |
           npx vite build --base /
 
@@ -153,16 +153,13 @@ jobs:
           TEST_BASE_URL: "https://shalz2230.github.io/brainbattlewebfrontend"
           TEST_EMAIL: "test@brainbattle.com"
           TEST_PASS: "test1234"
-          API_URL: "http://127.0.0.1:5000"
+          API_URL: "https://brainbattlewebbackend.onrender.com"
           SELENIUM_HEADLESS: "true"
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
-          echo "Starting Flask Backend..."
-          cd ../BrainBattleBackend
-          python app.py &
-          BACKEND_PID=$!
-          for i in $(seq 1 15); do sleep 2; curl -sf http://127.0.0.1:5000/ > /dev/null 2>&1 && break; done
+          echo "Checking hosted backend..."
+          for i in $(seq 1 15); do sleep 2; curl -sf https://brainbattlewebbackend.onrender.com/ > /dev/null 2>&1 && break; done
 
           echo "Checking hosted frontend..."
           for i in $(seq 1 10); do sleep 2; curl -sf https://shalz2230.github.io/brainbattlewebfrontend/ > /dev/null 2>&1 && break; done
@@ -172,8 +169,7 @@ jobs:
           node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js
           mv selenium-report.xlsx full-e2e-report.xlsx
 
-          echo "Stopping Servers..."
-          kill $BACKEND_PID || true
+          echo "Hosted E2E run complete."
 
       # ── Upload Artifacts ──────────────────────────────────────
       - name: 📤 Artifact — Full E2E Report
