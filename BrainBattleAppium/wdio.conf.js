@@ -4,7 +4,7 @@ exports.config = {
     runner: 'local',
     port: 4723,
     specs: [
-        './tests/**/*.js'
+        './tests/mega_android_1100.test.js'
     ],
     exclude: [],
     maxInstances: 1,

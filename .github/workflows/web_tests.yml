@@ -168,7 +168,7 @@ jobs:
 
           echo "Running Full E2E Tests..."
           cd ../BrainBattleE2E
-          npx mocha tests/e2e_all_100.test.js --timeout 180000 --reporter ./utils/excelReporter.js || true
+          npx mocha tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js || true
           mv selenium-report.xlsx full-e2e-report.xlsx 2>/dev/null || true
 
           echo "Stopping Servers..."
