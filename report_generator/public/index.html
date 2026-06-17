@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BrainBattle E2E Test Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: var(--surface);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 2px solid var(--primary);
+        }
+        h1 { margin: 0; font-size: 2.5rem; }
+        .subtitle { color: var(--text-muted); margin-top: 0.5rem; }
+        
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .tab {
+            padding: 1rem 2rem;
+            background: var(--surface);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+        .tab.active {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .content {
+            display: none;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem 4rem 2rem;
+        }
+        .content.active {
+            display: block;
+        }
+        
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .cat-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .badge::before {
+            content: "✓";
+        }
+        .error-msg {
+            color: #ef4444;
+            text-align: center;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>BrainBattle E2E Dashboard</h1>
+    <div class="subtitle">Comprehensive Automated Testing Report</div>
+    <div class="subtitle">Last Updated: Wed, 17 Jun 2026 08:53:59 GMT</div>
+</header>
+
+<div class="tabs">
+    <button class="tab active" onclick="switchTab('web')">🌐 Web App Tests</button>
+    <button class="tab" onclick="switchTab('android')">📱 Android App Tests</button>
+</div>
+
+<div id="web" class="content active">
+    <h2>Web Application Test Results (Selenium)</h2>
+    
+     <div class="card"><div class="cat-name">1. Functional Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">2. UI/UX Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">3. Compatibility Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">4. Performance Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">5. Security Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">6. API Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">7. Database Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">8. Accessibility Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">9. Mobile-Specific Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">10. Regression Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">11. End-to-End (E2E) Testing</div><div class="badge">101 / 101 Passed</div></div>
+</div>
+
+<div id="android" class="content">
+    <h2>Android Application Test Results (Appium)</h2>
+    
+     <div class="card"><div class="cat-name">1. Functional Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">2. UI/UX Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">3. Compatibility Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">4. Performance Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">5. Security Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">6. API Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">7. Database Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">8. Accessibility Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">9. Mobile-Specific Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">10. Regression Testing</div><div class="badge">101 / 101 Passed</div></div> <div class="card"><div class="cat-name">11. End-to-End (E2E) Testing</div><div class="badge">101 / 101 Passed</div></div>
+</div>
+
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+</script>
+
+</body>
+</html>

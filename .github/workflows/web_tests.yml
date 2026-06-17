@@ -182,6 +182,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Web-Full-E2E-Report
-          path: BrainBattleE2E/full-e2e-report.xlsx
+          path: |
+            BrainBattleE2E/full-e2e-report.xlsx
+            BrainBattleE2E/web_results.json
           retention-days: 30
           if-no-files-found: ignore
