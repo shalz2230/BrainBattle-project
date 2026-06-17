@@ -24,6 +24,7 @@ class ExcelReporter extends Mocha.reporters.Base {
 
     runner.on(EVENT_TEST_FAIL, (test, err) => {
       const testingType = this.inferTestingType(test);
+      const errorDetails = err?.stack || err?.message || String(err || '');
       this.typeBySuite.set(test.parent.title, testingType);
       this.results.push({
         Suite: test.parent.title,
@@ -31,9 +32,10 @@ class ExcelReporter extends Mocha.reporters.Base {
         TestName: test.title,
         Status: 'FAILED',
         Duration: `${test.duration || 0}ms`,
-        Error: err.message
+        Error: errorDetails
       });
       console.log(`\x1b[31m[FAIL]\x1b[0m ${test.title}`);
+      console.error(errorDetails);
     });
   }
 
@@ -66,7 +68,7 @@ class ExcelReporter extends Mocha.reporters.Base {
         { header: 'Test Name', key: 'TestName', width: 50 },
         { header: 'Status', key: 'Status', width: 15 },
         { header: 'Duration', key: 'Duration', width: 15 },
-        { header: 'Error', key: 'Error', width: 60 }
+        { header: 'Error', key: 'Error', width: 80 }
       ];
 
       sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -119,12 +121,13 @@ class ExcelReporter extends Mocha.reporters.Base {
           summaryMd += `| ${row.testingType} | ${row.total} | ${row.passed} | ${row.failed} |\n`;
         });
         summaryMd += '\n### Test Results\n\n';
-        summaryMd += '| Status | Suite | Testing Type | Test Name | Duration |\n';
-        summaryMd += '|--------|-------|-------------|-----------|----------|\n';
+        summaryMd += '| Status | Suite | Testing Type | Test Name | Duration | Error |\n';
+        summaryMd += '|--------|-------|-------------|-----------|----------|-------|\n';
 
         this.results.forEach((res) => {
-          const statusIcon = res.Status === 'PASSED' ? '✅' : '❌';
-          summaryMd += `| ${statusIcon} ${res.Status} | ${res.Suite} | ${res.TestingType} | ${res.TestName} | ${res.Duration} |\n`;
+          const statusIcon = res.Status === 'PASSED' ? 'PASS' : 'FAIL';
+          const error = String(res.Error || '').replace(/\r?\n/g, '<br>').replace(/\|/g, '\\|');
+          summaryMd += `| ${statusIcon} ${res.Status} | ${res.Suite} | ${res.TestingType} | ${res.TestName} | ${res.Duration} | ${error} |\n`;
         });
 
         fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryMd);

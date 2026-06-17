@@ -126,6 +126,7 @@ jobs:
 
       # ── Chrome ────────────────────────────────────────────────
       - name: 🌐 Setup Chrome
+        id: setup-chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
@@ -154,6 +155,7 @@ jobs:
           TEST_PASS: "test1234"
           API_URL: "http://127.0.0.1:5000"
           SELENIUM_HEADLESS: "true"
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
           echo "Starting Flask Backend..."
@@ -162,10 +164,7 @@ jobs:
           BACKEND_PID=$!
           for i in $(seq 1 15); do sleep 2; curl -sf http://127.0.0.1:5000/ > /dev/null 2>&1 && break; done
 
-          echo "Starting Vite Frontend..."
-          cd ../BrainBattleWeb
-          npx vite preview --host 127.0.0.1 --port 5173 --base / &
-          VITE_PID=$!
+          echo "Checking hosted frontend..."
           for i in $(seq 1 10); do sleep 2; curl -sf https://shalz2230.github.io/brainbattlewebfrontend/ > /dev/null 2>&1 && break; done
 
           echo "Running Full E2E Tests..."
@@ -174,7 +173,6 @@ jobs:
           mv selenium-report.xlsx full-e2e-report.xlsx
 
           echo "Stopping Servers..."
-          kill $VITE_PID || true
           kill $BACKEND_PID || true
 
       # ── Upload Artifacts ──────────────────────────────────────
