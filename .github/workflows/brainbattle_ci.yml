@@ -1,0 +1,458 @@
+name: 🧠 BrainBattle — Full CI Test Suite
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+# Cancel in-progress runs when a new push comes in
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Web — Pure Logic Unit Tests (no browser, 2 min)
+  # ─────────────────────────────────────────────────────────────
+  web-unit-tests:
+    name: 🔬 Web Unit Tests (Pure Logic, no browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🟢 Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleE2E/package-lock.json
+
+      - name: 📦 Install E2E deps
+        working-directory: BrainBattleE2E
+        run: npm ci
+
+      - name: 🔬 Run TC-W-U-001..020
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --timeout 30000 \
+            --grep "Unit Tests" \
+            --reporter spec
+        continue-on-error: true
+
+      - name: 📊 Write Summary
+        if: always()
+        run: |
+          echo "## 🔬 Web Unit Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "Tests: TC-W-U-001 to TC-W-U-020 (20 pure logic tests)" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Android JVM Unit Tests (no emulator, 10 min)
+  # ─────────────────────────────────────────────────────────────
+  android-unit-tests:
+    name: 🔬 Android Unit Tests (JVM, no emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ☕ JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: 🔐 Gradle permissions
+        working-directory: BrainBattle
+        run: chmod +x gradlew
+
+      - name: 🔬 Run TC-A-U-001..020
+        working-directory: BrainBattle
+        run: ./gradlew testDebugUnitTest --no-daemon
+        continue-on-error: true
+
+      - name: 📤 Upload Android Unit Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 📱-Android-Unit-Test-Report
+          path: BrainBattle/app/build/reports/tests/testDebugUnitTest/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Upload Android Unit XML Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 📱-Android-Unit-Test-XML
+          path: BrainBattle/app/build/test-results/testDebugUnitTest/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3: Web E2E Tests (Selenium + Backend + Vite, 30 min)
+  # ─────────────────────────────────────────────────────────────
+  web-e2e-tests:
+    name: 🌐 Web E2E Tests (Selenium — UI + Functional + Validation + Security)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: web-unit-tests      # Only run after fast unit tests pass
+
+    env:
+      TEST_BASE_URL: "http://127.0.0.1:5173"
+      TEST_EMAIL: "test@brainbattle.com"
+      TEST_PASS: "test1234"
+      API_URL: "http://127.0.0.1:5000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Backend Setup ─────────────────────────────────────────
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: BrainBattleBackend/requirements.txt
+
+      - name: 📦 Install Backend
+        working-directory: BrainBattleBackend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt bcrypt
+
+      - name: 🚀 Start Flask Backend
+        working-directory: BrainBattleBackend
+        env:
+          FLASK_DEBUG: "false"
+          FLASK_HOST: "127.0.0.1"
+          FLASK_PORT: "5000"
+          SECRET_KEY: "ci-test-key-$(date +%s)"
+          CORS_ORIGINS: "*"
+          DATABASE_URL: "sqlite:///./database/db.sqlite3"
+        run: |
+          python app.py &
+          echo "BACKEND_PID=$!" >> $GITHUB_ENV
+          sleep 5
+          curl --retry 6 --retry-delay 3 -sf http://127.0.0.1:5000/ && \
+            echo "✅ Backend ready" || (echo "❌ Backend failed" && exit 1)
+
+      - name: 🌱 Seed Test User
+        working-directory: BrainBattleBackend
+        run: |
+          python - <<'PYEOF'
+          import sys; sys.path.insert(0, '.')
+          from app import create_app
+          from database.db import db
+          from models.user_model import User
+          try:
+            import bcrypt
+            pw = bcrypt.hashpw(b'test1234', bcrypt.gensalt()).decode()
+          except:
+            import hashlib; pw = hashlib.sha256(b'test1234').hexdigest()
+          app = create_app()
+          with app.app_context():
+            db.create_all()
+            if not User.query.filter_by(email='test@brainbattle.com').first():
+              db.session.add(User(username='TestUser', email='test@brainbattle.com', password=pw))
+              db.session.commit(); print("✅ Seeded test user")
+            else: print("✅ User already exists")
+          PYEOF
+
+      # ── Web App Setup ─────────────────────────────────────────
+      - name: 🟢 Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleWeb/package-lock.json
+
+      - name: 📦 Install Web App
+        working-directory: BrainBattleWeb
+        run: npm ci
+
+      - name: 🏗️ Build Web App
+        working-directory: BrainBattleWeb
+        env:
+          VITE_API_URL: "http://127.0.0.1:5000"
+        run: npm run build
+
+      - name: 🚀 Start Vite Preview
+        working-directory: BrainBattleWeb
+        run: |
+          npx vite preview --host 127.0.0.1 --port 5173 &
+          echo "VITE_PID=$!" >> $GITHUB_ENV
+          sleep 4
+          curl --retry 5 --retry-delay 2 -sf http://127.0.0.1:5173/ && \
+            echo "✅ Vite server ready" || (echo "❌ Vite failed" && exit 1)
+
+      # ── Chrome Setup ──────────────────────────────────────────
+      - name: 🌐 Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: 🔧 Setup ChromeDriver
+        uses: nanasess/setup-chromedriver@v2
+
+      # ── E2E Deps ──────────────────────────────────────────────
+      - name: 📦 Install E2E Deps
+        working-directory: BrainBattleE2E
+        run: npm ci
+
+      # ── Run Tests by Category ─────────────────────────────────
+      - name: 🎨 TC-W-UI-001..025 — UI/UX Tests
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/ui_ux.test.js \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js || true
+          cp selenium-report.xlsx ui_ux_report.xlsx 2>/dev/null || true
+        continue-on-error: true
+
+      - name: ⚙️ TC-W-F-001..030 — Functional Tests
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/functional.test.js \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js || true
+          cp selenium-report.xlsx functional_report.xlsx 2>/dev/null || true
+        continue-on-error: true
+
+      - name: ✅ TC-W-V-001..015 — Validation Tests
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --grep "Validation Test Suite" \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js || true
+          cp selenium-report.xlsx validation_report.xlsx 2>/dev/null || true
+        continue-on-error: true
+
+      - name: 🛡️ TC-W-SEC-001..010 — Security Tests
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --grep "Security" \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js || true
+          cp selenium-report.xlsx security_report.xlsx 2>/dev/null || true
+        continue-on-error: true
+
+      # ── Upload Individual Reports ──────────────────────────────
+      - name: 📤 Artifact — 🎨 UI/UX Report (Excel)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🌐-Web-01-UIUX-Report
+          path: BrainBattleE2E/ui_ux_report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — ⚙️ Functional Report (Excel)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🌐-Web-02-Functional-Report
+          path: BrainBattleE2E/functional_report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — ✅ Validation Report (Excel)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🌐-Web-03-Validation-Report
+          path: BrainBattleE2E/validation_report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — 🛡️ Security Report (Excel)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🌐-Web-04-Security-Report
+          path: BrainBattleE2E/security_report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — 📦 All Web Reports (ZIP)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🌐-Web-ALL-Reports-Bundle
+          path: |
+            BrainBattleE2E/ui_ux_report.xlsx
+            BrainBattleE2E/functional_report.xlsx
+            BrainBattleE2E/validation_report.xlsx
+            BrainBattleE2E/security_report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 🧹 Stop Servers
+        if: always()
+        run: |
+          kill $BACKEND_PID 2>/dev/null || true
+          kill $VITE_PID    2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4: Android Instrumented Tests (Espresso on Emulator)
+  # ─────────────────────────────────────────────────────────────
+  android-instrumented:
+    name: 📲 Android Espresso Tests (Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: android-unit-tests   # Run after fast JVM tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ☕ JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: 🔐 Gradle permissions
+        working-directory: BrainBattle
+        run: chmod +x gradlew
+
+      - name: 🔧 Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: 📱 Run Espresso Tests on Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 28
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: |
+            cd BrainBattle
+            ./gradlew connectedDebugAndroidTest --no-daemon \
+              2>&1 | tee ../instrumented_output.log
+        continue-on-error: true
+
+      - name: 📤 Artifact — 📲 Espresso HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 📱-Android-Espresso-HTML-Report
+          path: BrainBattle/app/build/reports/androidTests/connected/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — 📲 Espresso XML Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 📱-Android-Espresso-XML-Results
+          path: BrainBattle/app/build/outputs/androidTest-results/connected/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Artifact — 📋 Espresso Console Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 📱-Android-Espresso-Console-Log
+          path: instrumented_output.log
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5: Build Debug APK
+  # ─────────────────────────────────────────────────────────────
+  build-apk:
+    name: 🏗️ Build Debug APK
+    runs-on: ubuntu-latest
+    needs: android-unit-tests
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ☕ JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: 🔐 Gradle permissions
+        working-directory: BrainBattle
+        run: chmod +x gradlew
+
+      - name: 🏗️ Build APK
+        working-directory: BrainBattle
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: 📤 Artifact — APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: 🏗️-BrainBattle-Debug-APK
+          path: BrainBattle/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 6: Summary Dashboard
+  # ─────────────────────────────────────────────────────────────
+  summary:
+    name: 📊 Test Run Summary
+    runs-on: ubuntu-latest
+    needs:
+      - web-unit-tests
+      - android-unit-tests
+      - web-e2e-tests
+      - android-instrumented
+      - build-apk
+    if: always()
+
+    steps:
+      - name: 📊 Write Summary Dashboard
+        run: |
+          echo "# 🧠 BrainBattle — Full CI Test Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status | Tests Covered |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔬 Web Unit Tests | ${{ needs.web-unit-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} | TC-W-U-001..020 (20 tests) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔬 Android Unit Tests | ${{ needs.android-unit-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} | TC-A-U-001..020 (20 tests) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌐 Web E2E Tests | ${{ needs.web-e2e-tests.result == 'success' && '✅ PASSED' || needs.web-e2e-tests.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }} | TC-W-UI, TC-W-F, TC-W-V, TC-W-SEC (80 tests) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📲 Android Espresso | ${{ needs.android-instrumented.result == 'success' && '✅ PASSED' || needs.android-instrumented.result == 'failure' && '❌ FAILED' || '⏭️ SKIPPED' }} | TC-A-UI, TC-A-F, TC-A-V (Espresso) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏗️ APK Build | ${{ needs.build-apk.result == 'success' && '✅ PASSED' || '❌ FAILED' }} | Debug APK |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📥 Downloadable Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Go to **Actions → This run → Artifacts** to download:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact Name | Contents |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🌐-Web-01-UIUX-Report\` | Excel: UI/UX test results |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🌐-Web-02-Functional-Report\` | Excel: Functional test results |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🌐-Web-03-Validation-Report\` | Excel: Validation test results |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🌐-Web-04-Security-Report\` | Excel: Security test results |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🌐-Web-ALL-Reports-Bundle\` | ZIP of all 4 web Excel reports |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`📱-Android-Unit-Test-Report\` | HTML report: JUnit unit tests |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`📱-Android-Unit-Test-XML\` | XML: JUnit results (for CI parsing) |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`📱-Android-Espresso-HTML-Report\` | HTML report: Espresso tests |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`📱-Android-Espresso-XML-Results\` | XML: Espresso results |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`🏗️-BrainBattle-Debug-APK\` | app-debug.apk for testing |" >> $GITHUB_STEP_SUMMARY

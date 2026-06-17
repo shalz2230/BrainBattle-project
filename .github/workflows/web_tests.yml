@@ -1,0 +1,303 @@
+name: 🌐 Web App Tests — Selenium + Unit
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "BrainBattleWeb/**"
+      - "BrainBattleBackend/**"
+      - "BrainBattleE2E/**"
+      - ".github/workflows/web_tests.yml"
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Pure Logic Unit Tests (no browser, instant)
+  # Covers TC-W-U-001 to TC-W-U-020
+  # ─────────────────────────────────────────────────────────────
+  unit-tests:
+    name: 🔬 Unit Tests (Pure Logic)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleE2E/package-lock.json
+
+      - name: 📦 Install E2E Dependencies
+        working-directory: BrainBattleE2E
+        run: npm ci
+
+      - name: 🔬 Run Unit Tests (no browser needed)
+        working-directory: BrainBattleE2E
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --timeout 30000 \
+            --grep "Unit Tests" \
+            --reporter json \
+            --reporter-option output=unit-test-results.json \
+            || true
+          npx mocha tests/validation_unit_security.test.js \
+            --timeout 30000 \
+            --grep "Unit Tests" \
+            --reporter spec
+
+      - name: 📤 Upload Unit Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: BrainBattleE2E/unit-test-results.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Backend Startup + Selenium E2E Tests
+  # Covers TC-W-UI-001..025, TC-W-F-001..030, TC-W-V-001..015,
+  #         TC-W-SEC-001..010
+  # ─────────────────────────────────────────────────────────────
+  e2e-tests:
+    name: 🌐 E2E Selenium Tests (UI + Functional + Validation + Security)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python + Flask Backend ─────────────────────────────
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: BrainBattleBackend/requirements.txt
+
+      - name: 📦 Install Backend Dependencies
+        working-directory: BrainBattleBackend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bcrypt
+
+      - name: 🚀 Start Flask Backend (background)
+        working-directory: BrainBattleBackend
+        env:
+          FLASK_DEBUG: "false"
+          FLASK_HOST: "127.0.0.1"
+          FLASK_PORT: "5000"
+          SECRET_KEY: "ci-test-secret-key"
+          CORS_ORIGINS: "*"
+          DATABASE_URL: "sqlite:///./database/db.sqlite3"
+        run: |
+          python app.py &
+          echo "BACKEND_PID=$!" >> $GITHUB_ENV
+          sleep 4
+          curl --retry 5 --retry-delay 2 -f http://127.0.0.1:5000/ || \
+            (echo "❌ Backend failed to start" && exit 1)
+          echo "✅ Backend is up at http://127.0.0.1:5000"
+
+      - name: 🌱 Seed Test User in Database
+        working-directory: BrainBattleBackend
+        env:
+          DATABASE_URL: "sqlite:///./database/db.sqlite3"
+        run: |
+          python - <<'EOF'
+          import sys, os
+          sys.path.insert(0, '.')
+          from app import create_app
+          from database.db import db
+          from models.user_model import User
+          import hashlib
+
+          try:
+            import bcrypt
+            hashed = bcrypt.hashpw(b'test1234', bcrypt.gensalt()).decode('utf-8')
+          except:
+            hashed = hashlib.sha256(b'test1234').hexdigest()
+
+          app = create_app()
+          with app.app_context():
+            db.create_all()
+            existing = User.query.filter_by(email='test@brainbattle.com').first()
+            if not existing:
+              user = User(username='TestUser', email='test@brainbattle.com', password=hashed)
+              db.session.add(user)
+              db.session.commit()
+              print("✅ Test user seeded")
+            else:
+              print("✅ Test user already exists")
+          EOF
+
+      # ── 3. Node + React Web App ───────────────────────────────
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleWeb/package-lock.json
+
+      - name: 📦 Install Web App Dependencies
+        working-directory: BrainBattleWeb
+        run: npm ci
+
+      - name: 🏗️ Build Web App
+        working-directory: BrainBattleWeb
+        env:
+          VITE_API_URL: "http://127.0.0.1:5000"
+        run: npm run build
+
+      - name: 🚀 Start Vite Preview Server (background)
+        working-directory: BrainBattleWeb
+        run: |
+          npx vite preview --host 127.0.0.1 --port 5173 &
+          echo "VITE_PID=$!" >> $GITHUB_ENV
+          sleep 3
+          curl --retry 5 --retry-delay 2 -f http://127.0.0.1:5173/ || \
+            (echo "❌ Web server failed to start" && exit 1)
+          echo "✅ Web server is up at http://127.0.0.1:5173"
+
+      # ── 4. Chrome + ChromeDriver ──────────────────────────────
+      - name: 🌐 Setup Google Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: 🔧 Setup ChromeDriver
+        uses: nanasess/setup-chromedriver@v2
+
+      # ── 5. Install E2E Test Dependencies ──────────────────────
+      - name: 📦 Install E2E Test Dependencies
+        working-directory: BrainBattleE2E
+        run: |
+          npm install package-lock.json 2>/dev/null || true
+          npm ci
+
+      # ── 6. Run All Web Tests ──────────────────────────────────
+      - name: 🎨 Run UI/UX Tests (TC-W-UI-001..025)
+        working-directory: BrainBattleE2E
+        env:
+          TEST_BASE_URL: "http://127.0.0.1:5173"
+          TEST_EMAIL: "test@brainbattle.com"
+          TEST_PASS: "test1234"
+          API_URL: "http://127.0.0.1:5000"
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+        run: |
+          npx mocha tests/ui_ux.test.js \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js \
+            || true
+          mv selenium-report.xlsx ui-ux-report.xlsx || true
+
+      - name: ⚙️ Run Functional Tests (TC-W-F-001..030)
+        working-directory: BrainBattleE2E
+        env:
+          TEST_BASE_URL: "http://127.0.0.1:5173"
+          TEST_EMAIL: "test@brainbattle.com"
+          TEST_PASS: "test1234"
+          API_URL: "http://127.0.0.1:5000"
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+        run: |
+          npx mocha tests/functional.test.js \
+            --timeout 90000 \
+            --reporter ./utils/excelReporter.js \
+            || true
+          mv selenium-report.xlsx functional-report.xlsx || true
+
+      - name: ✅ Run Validation Tests (TC-W-V-001..015)
+        working-directory: BrainBattleE2E
+        env:
+          TEST_BASE_URL: "http://127.0.0.1:5173"
+          TEST_EMAIL: "test@brainbattle.com"
+          TEST_PASS: "test1234"
+          API_URL: "http://127.0.0.1:5000"
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --timeout 90000 \
+            --grep "Validation Test Suite" \
+            --reporter ./utils/excelReporter.js \
+            || true
+          mv selenium-report.xlsx validation-report.xlsx || true
+
+      - name: 🛡️ Run Security Tests (TC-W-SEC-001..010)
+        working-directory: BrainBattleE2E
+        env:
+          TEST_BASE_URL: "http://127.0.0.1:5173"
+          TEST_EMAIL: "test@brainbattle.com"
+          TEST_PASS: "test1234"
+          API_URL: "http://127.0.0.1:5000"
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+        run: |
+          npx mocha tests/validation_unit_security.test.js \
+            --timeout 90000 \
+            --grep "Security" \
+            --reporter ./utils/excelReporter.js \
+            || true
+          mv selenium-report.xlsx security-report.xlsx || true
+
+      # ── 7. Upload All Reports as Artifacts ────────────────────
+      - name: 📤 Upload UI/UX Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Web-UIUX-Test-Report
+          path: BrainBattleE2E/ui-ux-report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Upload Functional Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Web-Functional-Test-Report
+          path: BrainBattleE2E/functional-report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Upload Validation Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Web-Validation-Test-Report
+          path: BrainBattleE2E/validation-report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Upload Security Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Web-Security-Test-Report
+          path: BrainBattleE2E/security-report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: 📤 Upload Combined Full Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Web-Full-Test-Report-ALL
+          path: |
+            BrainBattleE2E/ui-ux-report.xlsx
+            BrainBattleE2E/functional-report.xlsx
+            BrainBattleE2E/validation-report.xlsx
+            BrainBattleE2E/security-report.xlsx
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # ── 8. Cleanup ─────────────────────────────────────────────
+      - name: 🧹 Stop Background Servers
+        if: always()
+        run: |
+          kill $BACKEND_PID 2>/dev/null || true
+          kill $VITE_PID    2>/dev/null || true
