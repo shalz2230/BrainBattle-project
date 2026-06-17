@@ -1,10 +1,18 @@
 {
   "name": "brainbattlee2e",
   "version": "1.0.0",
-  "description": "",
+  "description": "BrainBattle E2E + Unit Test Suite",
   "main": "index.js",
   "scripts": {
-    "test": "mocha tests/*.test.js --timeout 30000 --reporter ./utils/excelReporter.js"
+    "test": "mocha tests/*.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
+    "test:ui": "mocha tests/ui_ux.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
+    "test:functional": "mocha tests/functional.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
+    "test:unit": "mocha tests/validation_unit_security.test.js --timeout 90000 --grep 'Unit Tests' --reporter spec",
+    "test:validation": "mocha tests/validation_unit_security.test.js --timeout 90000 --grep 'Validation' --reporter spec",
+    "test:security": "mocha tests/validation_unit_security.test.js --timeout 90000 --grep 'Security' --reporter spec",
+    "test:games": "mocha tests/games.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
+    "test:nav": "mocha tests/navigation.test.js --timeout 90000 --reporter ./utils/excelReporter.js",
+    "test:all-excel": "mocha tests/*.test.js --timeout 90000 --reporter ./utils/excelReporter.js"
   },
   "keywords": [],
   "author": "",
@@ -16,4 +24,4 @@
     "mocha": "^11.7.6",
     "selenium-webdriver": "^4.44.0"
   }
-}
+}
