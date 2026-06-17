@@ -137,6 +137,9 @@ jobs:
         working-directory: BrainBattleE2E
         run: npm install
 
+      - name: 🧹 Prepare E2E Artifacts Directory
+        run: mkdir -p BrainBattleE2E/test-artifacts
+
       # ── Start Servers & Run E2E Tests ─────────────────────────
       - name: 🚀 Start Servers & Run Full E2E Tests
         working-directory: BrainBattleE2E
@@ -146,10 +149,11 @@ jobs:
           FLASK_DEBUG: "false"
           FLASK_HOST: "127.0.0.1"
           FLASK_PORT: "5000"
-          TEST_BASE_URL: "http://localhost:5173/BrainBattle-project/brainbattlewebfrontend"
+          TEST_BASE_URL: "http://127.0.0.1:5173"
           TEST_EMAIL: "test@brainbattle.com"
           TEST_PASS: "test1234"
           API_URL: "http://127.0.0.1:5000"
+          SELENIUM_HEADLESS: "true"
           GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
           echo "Starting Flask Backend..."
@@ -162,7 +166,7 @@ jobs:
           cd ../BrainBattleWeb
           npx vite preview --host 127.0.0.1 --port 5173 --base / &
           VITE_PID=$!
-          for i in $(seq 1 10); do sleep 2; curl -sf http://localhost:5173/BrainBattle-project/brainbattlewebfrontend > /dev/null 2>&1 && break; done
+          for i in $(seq 1 10); do sleep 2; curl -sf http://127.0.0.1:5173/ > /dev/null 2>&1 && break; done
 
           echo "Running Full E2E Tests..."
           cd ../BrainBattleE2E
@@ -182,5 +186,6 @@ jobs:
           path: |
             BrainBattleE2E/full-e2e-report.xlsx
             BrainBattleE2E/web_results.json
+            BrainBattleE2E/test-artifacts
           retention-days: 30
           if-no-files-found: ignore

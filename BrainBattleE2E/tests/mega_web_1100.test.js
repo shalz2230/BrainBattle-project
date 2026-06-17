@@ -4,12 +4,15 @@
 // ============================================================
 
 const { expect } = require('chai');
+const fs = require('fs');
+const path = require('path');
 const { By, until, Key } = require('selenium-webdriver');
 const { getDriver, pause } = require('../utils/driverSetup');
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:5173/BrainBattle-project/brainbattlewebfrontend';
 const TEST_EMAIL = process.env.TEST_EMAIL || 'test@brainbattle.com';
 const TEST_PASS = process.env.TEST_PASS || 'test1234';
+const ARTIFACT_DIR = process.env.E2E_ARTIFACT_DIR || path.join(__dirname, '..', 'test-artifacts');
 
 const categories = [
   { id: 'F', name: 'Functional Testing', type: 'Functional' },
@@ -26,9 +29,43 @@ const categories = [
 ];
 
 async function openLogin(driver) {
-  await driver.get(`${BASE_URL}/#/login`);
-  await driver.wait(until.elementLocated(By.id('login-btn')), 10000);
-  await pause(driver, 250);
+  try {
+    await driver.get(`${BASE_URL}/#/login`);
+    await driver.wait(until.elementLocated(By.tagName('body')), 20000);
+    await driver.wait(until.elementLocated(By.id('login-btn')), 20000);
+    await pause(driver, 250);
+  } catch (error) {
+    await captureDiagnostics(driver, 'open-login-failure', error);
+    throw error;
+  }
+}
+
+async function captureDiagnostics(driver, label, error) {
+  try {
+    await fs.promises.mkdir(ARTIFACT_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeLabel = label.replace(/[^a-z0-9-_]+/gi, '_');
+    const baseName = `${safeLabel}-${stamp}`;
+
+    const snapshot = {
+      label,
+      error: error ? String(error.message || error) : '',
+      url: await driver.getCurrentUrl().catch(() => ''),
+      title: await driver.getTitle().catch(() => ''),
+      timestamp: new Date().toISOString()
+    };
+
+    const source = await driver.getPageSource().catch(() => '');
+    await fs.promises.writeFile(path.join(ARTIFACT_DIR, `${baseName}.json`), JSON.stringify(snapshot, null, 2));
+    await fs.promises.writeFile(path.join(ARTIFACT_DIR, `${baseName}.html`), source);
+
+    const screenshot = await driver.takeScreenshot().catch(() => null);
+    if (screenshot) {
+      await fs.promises.writeFile(path.join(ARTIFACT_DIR, `${baseName}.png`), screenshot, 'base64');
+    }
+  } catch (captureError) {
+    console.error('Failed to capture diagnostics:', captureError);
+  }
 }
 
 async function login(driver) {
@@ -51,6 +88,12 @@ describe('BrainBattle Web Coverage Suite - 110 Real Browser Tests', function () 
 
   before(async function () {
     driver = await getDriver();
+    try {
+      await openLogin(driver);
+    } catch (error) {
+      await captureDiagnostics(driver, 'before-all-failure', error);
+      throw error;
+    }
   });
 
   after(async function () {

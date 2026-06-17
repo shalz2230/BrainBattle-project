@@ -22,7 +22,11 @@ async function getDriver() {
     .build();
 
   await driver.manage().window().maximize();
-  await driver.manage().setTimeouts({ implicit: 5000 });
+  await driver.manage().setTimeouts({
+    implicit: 5000,
+    pageLoad: 30000,
+    script: 30000
+  });
 
   if (visualDelayMs > 0) {
     driver.visualDelayMs = visualDelayMs;
