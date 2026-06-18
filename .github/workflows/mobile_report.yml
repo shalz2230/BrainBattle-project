@@ -4,12 +4,15 @@
 #
 #  What it does:
 #    1. Builds the debug APK from source.
-#    2. Boots an Android emulator (API 29, x86_64).
-#    3. Starts the Appium server.
-#    4. Runs the full WDIO / Mocha Appium suite.
-#    5. The wdio.conf.js after-hook generates appium-report.xlsx
-#       with columns: Test ID | Title | Category | Test Type | Status | Duration | Error
-#    6. Uploads ONLY the .xlsx as the workflow artifact.
+#    2. Boots an Android API 29 emulator.
+#    3. Calls BrainBattleAppium/scripts/ci_run_tests.sh (committed file —
+#       no heredoc / indentation issues) which:
+#         a. Installs APK via adb
+#         b. Starts Appium server with health-check polling
+#         c. Runs npx wdio run wdio.conf.js
+#         d. wdio.conf.js after() hook writes appium-report.xlsx
+#         e. Falls back to generateFallbackReport.js if after() never fired
+#    4. Uploads ONLY the .xlsx artifact (no logs / html / xml).
 #
 #  Triggers: push / PR to main | master + manual dispatch
 #
@@ -78,12 +81,10 @@ jobs:
       - name: 🏗️  Build debug APK
         working-directory: BrainBattle
         run: |
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace
-          APK_PATH=$(find . -name "app-debug.apk" | head -1)
-          echo "APK_PATH=$(realpath $APK_PATH)" >> "$GITHUB_ENV"
-          echo "✅ APK built at: $(realpath $APK_PATH)"
+          ./gradlew assembleDebug --no-daemon
+          APK=$(find . -name "app-debug.apk" | head -1)
+          echo "APK_PATH=$(realpath "$APK")" >> "$GITHUB_ENV"
+          echo "✅ APK: $(realpath "$APK")"
 
       # ── 5. KVM hardware acceleration ─────────────────────────────
       - name: ⚡  Enable KVM
@@ -93,71 +94,19 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # ── 6. Appium driver install ──────────────────────────────────
+      # ── 6. Appium UiAutomator2 driver ────────────────────────────
       - name: 🤖  Install Appium UiAutomator2 driver
         run: appium driver install uiautomator2
 
-      # ── 7. Write the test runner script ──────────────────────────
-      #   The reactivecircus emulator-runner executes each line of
-      #   `script:` as a SEPARATE /usr/bin/sh -c call, so multi-line
-      #   backslash continuations always fail with exit 127.
-      #   Solution: write a self-contained .sh file here (normal run:
-      #   block, full bash), then call it as ONE line inside script:.
-      - name: 📝  Write run_tests.sh
-        run: |
-          cat > run_tests.sh << 'SHELL'
-          #!/usr/bin/env bash
-          set -euo pipefail
-
-          echo "📱 Device ready"
-
-          # Install APK
-          echo "📦 Installing APK..."
-          adb install -r "${APK_PATH}"
-
-          # Start Appium server in background
-          echo "🚀 Starting Appium server..."
-          appium --log-level error > /tmp/appium.log 2>&1 &
-          APPIUM_PID=$!
-          echo "   Waiting 10s for Appium to initialise..."
-          sleep 10
-
-          # Verify Appium is up
-          if ! kill -0 "$APPIUM_PID" 2>/dev/null; then
-            echo "❌ Appium failed to start. Log tail:"
-            tail -20 /tmp/appium.log || true
-            exit 1
-          fi
-          echo "✅ Appium running (PID $APPIUM_PID)"
-
-          # Change into the Appium project
-          cd "${GITHUB_WORKSPACE}/BrainBattleAppium"
-
-          # Export env vars needed by wdio.conf.js
-          export APPIUM_UDID="emulator-5554"
-          export APPIUM_APP_PATH="${APK_PATH}"
-          export XLSX_OUTPUT="${GITHUB_WORKSPACE}/BrainBattleAppium/appium-report.xlsx"
-
-          echo "🧪 Running WDIO Appium test suite..."
-          set +e
-          npx wdio run wdio.conf.js
-          TEST_EXIT=$?
-          set -e
-          echo "   Test exit code: $TEST_EXIT"
-
-          # Copy report to workspace root so it survives emulator cleanup
-          if [ -f "appium-report.xlsx" ]; then
-            cp appium-report.xlsx "${GITHUB_WORKSPACE}/brainbattle-mobile-test-report.xlsx"
-            echo "✅ Report copied to workspace root"
-          else
-            echo "⚠️  appium-report.xlsx not found"
-          fi
-
-          exit $TEST_EXIT
-          SHELL
-          chmod +x run_tests.sh
+      # ── 7. Make the committed CI script executable ────────────────
+      - name: 🔧  Make ci_run_tests.sh executable
+        run: chmod +x BrainBattleAppium/scripts/ci_run_tests.sh
 
       # ── 8. Boot emulator & run the script ────────────────────────
+      #   IMPORTANT: reactivecircus/android-emulator-runner runs
+      #   `script:` as a SINGLE /usr/bin/sh -c command. We pass a
+      #   one-liner that calls our committed .sh file — no multi-line
+      #   backslash continuations, no heredoc indentation bugs.
       - name: 📱  Boot emulator & run Appium tests
         uses: reactivecircus/android-emulator-runner@v2
         id: appium_run
@@ -170,9 +119,24 @@ jobs:
           avd-name: brainbattle_avd
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: bash run_tests.sh
+          script: bash "$GITHUB_WORKSPACE/BrainBattleAppium/scripts/ci_run_tests.sh"
 
-      # ── 8. Upload ONLY the xlsx ───────────────────────────────────
+      # ── 9. Guarantee xlsx exists even if step 8 errored ──────────
+      - name: 📄  Ensure xlsx report exists (final fallback)
+        if: always()
+        run: |
+          REPORT="${GITHUB_WORKSPACE}/brainbattle-mobile-test-report.xlsx"
+          if [ ! -f "$REPORT" ]; then
+            echo "⚠️  Report missing — generating emergency fallback..."
+            cd BrainBattleAppium
+            node utils/generateFallbackReport.js \
+              --output "$REPORT" \
+              --exit-code 1
+          else
+            echo "✅ Report already exists at: $REPORT"
+          fi
+
+      # ── 10. Upload ONLY the xlsx ──────────────────────────────────
       - name: 📤  Upload Mobile Test Report (.xlsx)
         if: always()
         uses: actions/upload-artifact@v4
@@ -180,9 +144,9 @@ jobs:
           name: BrainBattle-Mobile-Test-Report-${{ github.run_number }}
           path: brainbattle-mobile-test-report.xlsx
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
-      # ── 9. Step Summary ──────────────────────────────────────────
+      # ── 11. Step Summary ─────────────────────────────────────────
       - name: 📝  Write Step Summary
         if: always()
         run: |
@@ -204,17 +168,17 @@ jobs:
             echo ""
             echo "| # | Category | Type |"
             echo "| --- | --- | --- |"
-            echo "| 1 | Functional Testing      | Functionality Testing |"
-            echo "| 2 | UI/UX Testing           | UI/UX Testing |"
-            echo "| 3 | Compatibility Testing   | Compatibility Testing |"
-            echo "| 4 | Performance Testing     | Performance Testing |"
-            echo "| 5 | Security Testing        | Vulnerability Testing |"
-            echo "| 6 | API Testing             | API Testing |"
-            echo "| 7 | Database Testing        | Database Testing |"
-            echo "| 8 | Accessibility Testing   | Accessibility Testing |"
-            echo "| 9 | Mobile-Specific Testing | Mobile-Specific Testing |"
-            echo "| 10 | Regression Testing     | Regression Testing |"
-            echo "| 11 | End-to-End Testing     | E2E Testing |"
+            echo "| 1  | Functional Testing       | Functionality Testing   |"
+            echo "| 2  | UI/UX Testing            | UI/UX Testing           |"
+            echo "| 3  | Compatibility Testing    | Compatibility Testing   |"
+            echo "| 4  | Performance Testing      | Performance Testing     |"
+            echo "| 5  | Security Testing         | Vulnerability Testing   |"
+            echo "| 6  | API Testing              | API Testing             |"
+            echo "| 7  | Database Testing         | Database Testing        |"
+            echo "| 8  | Accessibility Testing    | Accessibility Testing   |"
+            echo "| 9  | Mobile-Specific Testing  | Mobile-Specific Testing |"
+            echo "| 10 | Regression Testing       | Regression Testing      |"
+            echo "| 11 | End-to-End Testing       | E2E Testing             |"
             echo ""
             echo "📥 Download **\`BrainBattle-Mobile-Test-Report-${{ github.run_number }}\`** from Artifacts for the full Excel report."
           } >> "$GITHUB_STEP_SUMMARY"
