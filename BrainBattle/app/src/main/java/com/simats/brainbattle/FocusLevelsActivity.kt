@@ -14,7 +14,7 @@ import retrofit2.Callback
 import retrofit2.Response
 
 class FocusLevelsActivity : AppCompatActivity() {
-
+ 
     private val totalLevels = 100
 
     private lateinit var gridLayout: GridLayout
