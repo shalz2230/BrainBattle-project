@@ -11,20 +11,22 @@ exports.config = {
     runner: 'local',
     port:   4723,
 
-    specs: [
-        './tests/01_ui_ux/*.test.js',
-        './tests/02_functional/*.test.js',
-        './tests/03_unit/*.test.js',
-        './tests/04_validation/*.test.js',
-        './tests/05_security/*.test.js',
-        './tests/06_api/*.test.js',
-        './tests/07_database/*.test.js',
-        './tests/08_accessibility/*.test.js',
-        './tests/09_mobile/*.test.js',
-        './tests/10_performance/*.test.js',
-        './tests/11_compat_regression/*.test.js',
-        './tests/12_e2e/*.test.js'
-    ],
+    specs: process.env.WDIO_CI_SPEC
+        ? [ process.env.WDIO_CI_SPEC ]
+        : [
+            './tests/01_ui_ux/*.test.js',
+            './tests/02_functional/*.test.js',
+            './tests/03_unit/*.test.js',
+            './tests/04_validation/*.test.js',
+            './tests/05_security/*.test.js',
+            './tests/06_api/*.test.js',
+            './tests/07_database/*.test.js',
+            './tests/08_accessibility/*.test.js',
+            './tests/09_mobile/*.test.js',
+            './tests/10_performance/*.test.js',
+            './tests/11_compat_regression/*.test.js',
+            './tests/12_e2e/*.test.js'
+        ],
     exclude: [],
 
     maxInstances: 1,
