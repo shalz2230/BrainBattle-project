@@ -9,18 +9,79 @@ if (!fs.existsSync(summaryFile)) {
   process.exit(1);
 }
 
-const data = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+let data;
+try {
+  data = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+} catch (e) {
+  console.error("Failed to parse summary.json as JSON:", e.message);
+  process.exit(1);
+}
 
-const rps = data.metrics.http_reqs.values.rate.toFixed(2);
-const totalReqs = data.metrics.http_reqs.values.count;
-const avgTime = data.metrics.http_req_duration.values.avg.toFixed(2);
-const minTime = data.metrics.http_req_duration.values.min.toFixed(2);
-const maxTime = data.metrics.http_req_duration.values.max.toFixed(2);
-const p95Time = data.metrics.http_req_duration.values['p(95)'].toFixed(2);
-const failRate = (data.metrics.http_req_failed.values.rate * 100).toFixed(2);
-const checksPassed = data.metrics.checks ? (data.metrics.checks.values.passes) : 0;
-const checksTotal = data.metrics.checks ? (data.metrics.checks.values.passes + data.metrics.checks.values.fails) : 0;
-const checksRate = checksTotal > 0 ? ((checksPassed / checksTotal) * 100).toFixed(2) : '100.00';
+console.log("Successfully loaded summary.json");
+if (data && data.metrics) {
+  console.log("Metrics available:", Object.keys(data.metrics));
+  // Print a sample metric for diagnostics
+  const sampleKey = Object.keys(data.metrics)[0];
+  if (sampleKey) {
+    console.log(`Sample metric structure for '${sampleKey}':`, JSON.stringify(data.metrics[sampleKey], null, 2));
+  }
+} else {
+  console.log("No metrics found in summary.json structure!");
+}
+
+// Helper: Safely resolve a metric's value across flat or nested structures
+function getMetricValue(metricObj, key) {
+  if (!metricObj) return undefined;
+  // Try nested values first
+  if (metricObj.values && metricObj.values[key] !== undefined) {
+    return metricObj.values[key];
+  }
+  // Fallback to flat properties
+  if (metricObj[key] !== undefined) {
+    return metricObj[key];
+  }
+  // Fallback to searching custom sub-keys
+  return undefined;
+}
+
+// Safely extract metrics with default fallbacks
+const httpReqs = data.metrics?.http_reqs;
+const rpsVal = getMetricValue(httpReqs, 'rate');
+const rps = typeof rpsVal === 'number' ? rpsVal.toFixed(2) : '0.00';
+
+const totalReqsVal = getMetricValue(httpReqs, 'count');
+const totalReqs = typeof totalReqsVal === 'number' ? totalReqsVal : 0;
+
+const httpDuration = data.metrics?.http_req_duration;
+const avgVal = getMetricValue(httpDuration, 'avg');
+const avgTime = typeof avgVal === 'number' ? avgVal.toFixed(2) : '0.00';
+
+const minVal = getMetricValue(httpDuration, 'min');
+const minTime = typeof minVal === 'number' ? minVal.toFixed(2) : '0.00';
+
+const maxVal = getMetricValue(httpDuration, 'max');
+const maxTime = typeof maxVal === 'number' ? maxVal.toFixed(2) : '0.00';
+
+const p95Val = getMetricValue(httpDuration, 'p(95)');
+const p95Time = typeof p95Val === 'number' ? p95Val.toFixed(2) : '0.00';
+
+const httpFailed = data.metrics?.http_req_failed;
+const failVal = getMetricValue(httpFailed, 'rate');
+const failRate = typeof failVal === 'number' ? (failVal * 100).toFixed(2) : '0.00';
+
+// Checks stats
+let checksRate = '100.00';
+let checksPassed = 0;
+let checksTotal = 0;
+if (data.metrics?.checks) {
+  const checksObj = data.metrics.checks;
+  checksPassed = getMetricValue(checksObj, 'passes') || 0;
+  const checksFailed = getMetricValue(checksObj, 'fails') || 0;
+  checksTotal = checksPassed + checksFailed;
+  if (checksTotal > 0) {
+    checksRate = ((checksPassed / checksTotal) * 100).toFixed(2);
+  }
+}
 
 let markdown = `# 📈 BrainBattle API Load Test Executive Summary\n\n`;
 markdown += `> **Execution Date:** ${new Date().toUTCString()}  \n`;
@@ -42,7 +103,7 @@ markdown += `| **Checks Pass Rate** | **${checksRate}%** | Verification assertio
 markdown += `---\n\n`;
 markdown += `## 🏆 Test Verdict\n\n`;
 
-const success = failRate < 5 && parseFloat(avgTime) < 1500;
+const success = parseFloat(failRate) < 5 && parseFloat(avgTime) < 1500;
 if (success) {
   markdown += `### ✅ **PASSED**\n`;
   markdown += `The backend API handles normal concurrent loads efficiently. Response times are fast and failure rates are well within the 5% threshold.\n`;
