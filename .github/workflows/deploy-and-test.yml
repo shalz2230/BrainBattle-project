@@ -25,6 +25,9 @@ jobs:
     name: 🌐 Build · Deploy · 1100 E2E Tests · Web Security Review
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       # ── 1. Source ──────────────────────────────────────────────────────────
@@ -52,19 +55,11 @@ jobs:
           VITE_API_URL: "https://brainbattlewebbackend.onrender.com"
         run: npm run build
 
-      # ── 4. Deploy to GitHub Pages ─────────────────────────────────────────
-      - name: 🚀  Deploy Frontend to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: BrainBattleWeb/dist
-          branch: gh-pages
-          clean: false
-
-      # ── 5. Start Local Server & Verify Live Deployment ────────────────────
+      # ── 4. Start Local Server & Determine Test Target ─────────────────────
       - name: 🌐  Start Local Server & Determine Test Target
         run: |
           echo "====================================================="
-          echo "🌐 STARTING LOCAL FRONTEND FOR FALLBACK / TIMEOUT SAFETY"
+          echo "🌐 STARTING LOCAL FRONTEND FOR E2E TESTING"
           echo "====================================================="
           cd BrainBattleWeb
           npx vite preview --port 5173 --host 127.0.0.1 --base /BrainBattle-project/ &
@@ -73,25 +68,14 @@ jobs:
           cd ..
           sleep 4
           curl -sI http://127.0.0.1:5173/BrainBattle-project/ || echo "Local server not reachable yet"
-          
-          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          echo "Pinging live GitHub Pages deployment at: $PAGES_URL"
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$PAGES_URL/" || echo "failed")
-          if [ "$STATUS" = "200" ]; then
-            echo "✅ Live GitHub Pages deployment is ONLINE (HTTP 200)!"
-            echo "TEST_BASE_URL=$PAGES_URL" >> "$GITHUB_ENV"
-          else
-            echo "⚠️ Live Pages returned status $STATUS (not HTTP 200)."
-            echo "👉 Falling back to local Vite preview server."
-            echo "TEST_BASE_URL=http://127.0.0.1:5173/BrainBattle-project" >> "$GITHUB_ENV"
-          fi
+          echo "TEST_BASE_URL=http://127.0.0.1:5173/BrainBattle-project" >> "$GITHUB_ENV"
 
-      # ── 6. Install E2E Dependencies ───────────────────────────────────────
+      # ── 5. Install E2E Dependencies ───────────────────────────────────────
       - name: 📦  Install E2E dependencies
         working-directory: BrainBattleE2E
         run: npm install
 
-      # ── 7. Run Web Frontend Security Suite ───────────────────────────────
+      # ── 6. Run Web Frontend Security Suite ───────────────────────────────
       - name: 🛡️  Run Web Frontend Security Suite
         run: |
           echo "====================================================="
@@ -100,7 +84,7 @@ jobs:
           NODE_PATH="${GITHUB_WORKSPACE}/BrainBattleE2E/node_modules" \
             node BrainBattleE2E/scripts/generateWebSecuritySuite.js
 
-      # ── 8. Setup Chrome & ChromeDriver ────────────────────────────────────
+      # ── 7. Setup Chrome & ChromeDriver ────────────────────────────────────
       - name: 🌐  Setup Chrome (stable)
         id: chrome
         uses: browser-actions/setup-chrome@v1
@@ -114,7 +98,7 @@ jobs:
         id: chromedriver
         run: echo "path=$(which chromedriver)" >> "$GITHUB_OUTPUT"
 
-      # ── 9. Run 1100 Selenium E2E Tests ────────────────────────────────────
+      # ── 8. Run 1100 Selenium E2E Tests ────────────────────────────────────
       - name: 🧪  Run 1100 Selenium E2E Tests (110 categories × 10 tests)
         id: selenium
         working-directory: BrainBattleE2E
@@ -167,7 +151,7 @@ jobs:
           exit $EXIT
         continue-on-error: true
 
-      # ── 10. k6 Load Tests ─────────────────────────────────────────────────
+      # ── 9. k6 Load Tests ─────────────────────────────────────────────────
       - name: 🛠️  Setup k6
         uses: grafana/setup-k6-action@v1
 
@@ -176,6 +160,15 @@ jobs:
         with:
           path: BrainBattleBackend/scripts/load-test.js
           flags: --env BACKEND_URL=https://brainbattlewebbackend.onrender.com/
+
+      # ── 10. Copy HTML reports into built dist for unified deployment ─────────
+      - name: 📁  Inject E2E Reports into Build Dist
+        if: always()
+        run: |
+          mkdir -p BrainBattleWeb/dist/reports/latest
+          mkdir -p BrainBattleWeb/dist/reports/history/build-${{ github.run_number }}
+          [ -f Test_Results/HTML/execution-report.html ] && cp Test_Results/HTML/execution-report.html BrainBattleWeb/dist/reports/latest/execution-report.html
+          [ -f Test_Results/HTML/execution-report.html ] && cp Test_Results/HTML/execution-report.html BrainBattleWeb/dist/reports/history/build-${{ github.run_number }}/execution-report.html
 
       # ── 11. Upload All Artifacts ──────────────────────────────────────────
       - name: 📤  Upload E2E Test Results
@@ -194,24 +187,17 @@ jobs:
           path: Web_Security_Results/
           retention-days: 30
 
-      # ── 12. Deploy HTML reports to Pages ──────────────────────────────────
-      - name: 🚀  Deploy E2E Report to Latest
+      # ── 12. Deploy Unified App and Reports to GitHub Pages ───────────────
+      - name: 📤  Upload Pages Artifact
         if: always()
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: Test_Results/HTML
-          branch: gh-pages
-          target-folder: reports/latest
-          clean: false
+          path: BrainBattleWeb/dist
 
-      - name: 🚀  Deploy E2E Report to History
+      - name: 🚀  Deploy Unified Bundle to GitHub Pages
         if: always()
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: Test_Results/HTML
-          branch: gh-pages
-          target-folder: reports/history/build-${{ github.run_number }}
-          clean: false
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       # ── 13. Write Full GitHub Actions Step Summary ────────────────────────
       - name: 📝  Write Complete Step Summary
