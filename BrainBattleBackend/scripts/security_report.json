@@ -1,0 +1,101 @@
+{
+  "generated": "2026-06-18T03:49:43.318684Z",
+  "project": "BrainBattle",
+  "summary": {
+    "total": 15,
+    "passed": 14,
+    "warnings": 1
+  },
+  "checks": [
+    {
+      "suite": "File Structure",
+      "name": "Backend app.py present",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "File Structure",
+      "name": "config.py present (no hardcoded secrets)",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Authentication",
+      "name": "Auth routes defined",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Authentication",
+      "name": "JWT used for authentication",
+      "status": "FAILED",
+      "severity": "WARNING"
+    },
+    {
+      "suite": "Authentication",
+      "name": "No plain-text password storage detected",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Security Headers",
+      "name": "Flask CORS configured",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Data Layer",
+      "name": "Database directory present",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Data Layer",
+      "name": "Models directory present",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Data Layer",
+      "name": "SQLAlchemy ORM used (prevents raw SQL injection)",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "API Routes",
+      "name": "Dashboard routes defined",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "API Routes",
+      "name": "User routes defined",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "API Routes",
+      "name": "Progress routes defined",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Production Safety",
+      "name": "No DEBUG=True in production config",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Dependencies",
+      "name": "requirements file present",
+      "status": "PASSED",
+      "severity": "INFO"
+    },
+    {
+      "suite": "Dependencies",
+      "name": "werkzeug present (password hashing support)",
+      "status": "PASSED",
+      "severity": "INFO"
+    }
+  ]
+}
