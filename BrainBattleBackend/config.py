@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 # Load .env file if present
 load_dotenv()
-
+# sk
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
