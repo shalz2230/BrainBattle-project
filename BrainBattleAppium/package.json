@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "wdio run wdio.conf.js",
+    "test": "npx wdio run wdio.conf.js",
     "appium:start": "powershell -ExecutionPolicy Bypass -File scripts/start-appium.ps1",
     "test:local": "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1"
   },
