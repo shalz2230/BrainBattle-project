@@ -60,8 +60,10 @@ export APPIUM_UDID="emulator-5554"
 export APPIUM_APP_PATH="${APK_PATH}"
 export XLSX_OUTPUT="${APPIUM_DIR}/appium-report.xlsx"
 
+# Ensure node_modules bins are executable and run wdio CLI directly via Node to bypass shell permission issues
+chmod +x node_modules/.bin/* 2>/dev/null || true
 set +e
-npx wdio run wdio.conf.js
+node node_modules/@wdio/cli/bin/wdio.js run wdio.conf.js
 WDIO_EXIT=$?
 set -e
 echo ""

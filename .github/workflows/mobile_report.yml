@@ -150,35 +150,5 @@ jobs:
       - name: 📝  Write Step Summary
         if: always()
         run: |
-          STATUS="${{ steps.appium_run.outcome }}"
-          [ "$STATUS" = "success" ] && BADGE="✅ Passed" || BADGE="❌ Failed / Partial"
-          {
-            echo "## 📱 Mobile Appium Test Report — $BADGE"
-            echo ""
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| Platform    | Android API 29 (x86_64 emulator) |"
-            echo "| App Package | \`com.simats.brainbattle\` |"
-            echo "| Framework   | Appium v3 + WebdriverIO + Mocha |"
-            echo "| Commit      | \`${{ github.sha }}\` |"
-            echo "| Branch      | \`${{ github.ref_name }}\` |"
-            echo "| Run #       | \`${{ github.run_number }}\` |"
-            echo ""
-            echo "### 📋 Test Categories Covered"
-            echo ""
-            echo "| # | Category | Type |"
-            echo "| --- | --- | --- |"
-            echo "| 1  | Functional Testing       | Functionality Testing   |"
-            echo "| 2  | UI/UX Testing            | UI/UX Testing           |"
-            echo "| 3  | Compatibility Testing    | Compatibility Testing   |"
-            echo "| 4  | Performance Testing      | Performance Testing     |"
-            echo "| 5  | Security Testing         | Vulnerability Testing   |"
-            echo "| 6  | API Testing              | API Testing             |"
-            echo "| 7  | Database Testing         | Database Testing        |"
-            echo "| 8  | Accessibility Testing    | Accessibility Testing   |"
-            echo "| 9  | Mobile-Specific Testing  | Mobile-Specific Testing |"
-            echo "| 10 | Regression Testing       | Regression Testing      |"
-            echo "| 11 | End-to-End Testing       | E2E Testing             |"
-            echo ""
-            echo "📥 Download **\`BrainBattle-Mobile-Test-Report-${{ github.run_number }}\`** from Artifacts for the full Excel report."
-          } >> "$GITHUB_STEP_SUMMARY"
+          cd BrainBattleAppium
+          node utils/generateSummary.js
