@@ -65,10 +65,10 @@ describe('BrainBattle OnePlus LE2101 — 300+ Automated Test Suite', function ()
     // 2. Generate 300 Parametric Tests across 30 Categories
     testCategories.forEach((category, catIndex) => {
         describe(category, function () {
-            const prefixId = \`TC-OP-\${(catIndex + 1).toString().padStart(2, '0')}\`;
+            const prefixId = `TC-OP-${(catIndex + 1).toString().padStart(2, '0')}`;
 
             for (let i = 1; i <= 10; i++) {
-                it(\`\${prefixId}-\${i.toString().padStart(2, '0')} | \${category} — Parameterized Execution Step \${i}\`, async function () {
+                it(`${prefixId}-${i.toString().padStart(2, '0')} | ${category} — Parameterized Execution Step ${i}`, async function () {
                     // Simulating deep assertions and checks specific to OxygenOS hardware bounds
                     // In a live environment, this would do element.getSize(), touchActions, etc.
                     const stepPassed = (i > 0);
@@ -76,7 +76,7 @@ describe('BrainBattle OnePlus LE2101 — 300+ Automated Test Suite', function ()
                     
                     // Periodically poll the driver to ensure the physical device session is still active
                     if (i === 5) {
-                        const batteryInfo = await driver.getBatteryInfo();
+                        const batteryInfo = await driver.execute('mobile: batteryInfo');
                         assert(batteryInfo.level >= 0.0); // Verify device battery is readable
                     }
                 });
