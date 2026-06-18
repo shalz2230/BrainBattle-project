@@ -91,8 +91,37 @@ exports.config = {
             status:   result.passed ? 'passed' : result.pending ? 'skipped' : 'failed',
             duration: result.duration || 0,
             error:    result.error ? (result.error.message || String(result.error)).slice(0, 300) : '',
+            spec:     path.basename(test.file || '')
         };
         fs.appendFileSync(tempFile, JSON.stringify(r) + '\n');
+    },
+
+    after(result, capabilities, specs) {
+        // Catch fatal spec failures (like Appium connection refused or before() crashes) 
+        // that completely bypassed the afterTest hook.
+        if (result !== 0 && specs && specs.length > 0) {
+            const fs = require('fs');
+            const path = require('path');
+            const tempFile = path.join(process.cwd(), '.wdio-results.jsonl');
+            const specName = path.basename(specs[0]);
+            
+            let content = '';
+            if (fs.existsSync(tempFile)) content = fs.readFileSync(tempFile, 'utf8');
+            
+            if (!content.includes(specName)) {
+                const r = {
+                    id:       'FATAL-ERR',
+                    title:    `Failed to run tests in: ${specName}`,
+                    category: 'All',
+                    type:     'Initialization',
+                    status:   'failed',
+                    duration: 0,
+                    error:    'Session creation or before() hook crashed. Check Appium/Action logs.',
+                    spec:     specName
+                };
+                fs.appendFileSync(tempFile, JSON.stringify(r) + '\n');
+            }
+        }
     },
 
     async onComplete() {
