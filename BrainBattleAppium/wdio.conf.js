@@ -1,5 +1,9 @@
 const path = require('path');
 
+const apkPath = process.env.APPIUM_APP_PATH
+    || path.join(process.cwd(), '../BrainBattle/app/build/outputs/apk/debug/app-debug.apk');
+const deviceUdid = process.env.APPIUM_UDID || 'adb-d11f8cb0-WCzuAr._adb-tls-connect._tcp';
+
 exports.config = {
     runner: 'local',
     port: 4723,
@@ -10,9 +14,10 @@ exports.config = {
     maxInstances: 1,
     capabilities: [{
         platformName: 'Android',
-        'appium:deviceName': 'emulator-5554',
+        'appium:deviceName': 'Android Device',
+        'appium:udid': deviceUdid,
         'appium:automationName': 'UiAutomator2',
-        'appium:app': path.join(process.cwd(), '../BrainBattle/app/build/outputs/apk/debug/app-debug.apk'),
+        'appium:app': apkPath,
         'appium:appPackage': 'com.simats.brainbattle',
         'appium:appActivity': '.SplashActivity',
         'appium:noReset': false,
