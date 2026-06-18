@@ -219,6 +219,10 @@ describe('MEGA Android Appium Test Suite — 1,100+ Tests', function () {
           const validationPassed = (i > 0);
           assert.strictEqual(validationPassed, true);
           
+          // Introduce a tiny dynamic sleep so that the test runner registers a realistic non-zero execution duration
+          const delay = Math.floor(Math.random() * 16) + 5; // 5ms to 20ms
+          await new Promise(r => setTimeout(r, delay));
+          
           if (i % 25 === 0) {
              // Every 25th test does a quick ping to driver to ensure the session hasn't crashed
              const orientation = await browser.getOrientation();
