@@ -60,23 +60,31 @@ jobs:
           branch: gh-pages
           clean: false
 
-      # ── 5. Verify Live Deployment ─────────────────────────────────────────
-      - name: ⏳  Verify Live Frontend Deployment
+      # ── 5. Start Local Server & Verify Live Deployment ────────────────────
+      - name: 🌐  Start Local Server & Determine Test Target
         run: |
-          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          echo "Pinging: $URL"
-          for i in $(seq 1 30); do
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$URL" || echo "failed")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ Live deployment online (HTTP 200)"
-              break
-            fi
-            echo "  Attempt $i: Status $STATUS — waiting 5s..."
-            sleep 5
-            if [ "$i" -eq 30 ]; then
-              echo "❌ Timeout waiting for Pages. Proceeding anyway."
-            fi
-          done
+          echo "====================================================="
+          echo "🌐 STARTING LOCAL FRONTEND FOR FALLBACK / TIMEOUT SAFETY"
+          echo "====================================================="
+          cd BrainBattleWeb
+          npx vite preview --port 5173 --host 127.0.0.1 --base /BrainBattle-project/ &
+          VITE_PID=$!
+          echo "Vite preview server starting with PID: $VITE_PID"
+          cd ..
+          sleep 4
+          curl -sI http://127.0.0.1:5173/BrainBattle-project/ || echo "Local server not reachable yet"
+          
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          echo "Pinging live GitHub Pages deployment at: $PAGES_URL"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$PAGES_URL/" || echo "failed")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Live GitHub Pages deployment is ONLINE (HTTP 200)!"
+            echo "TEST_BASE_URL=$PAGES_URL" >> "$GITHUB_ENV"
+          else
+            echo "⚠️ Live Pages returned status $STATUS (not HTTP 200)."
+            echo "👉 Falling back to local Vite preview server."
+            echo "TEST_BASE_URL=http://127.0.0.1:5173/BrainBattle-project" >> "$GITHUB_ENV"
+          fi
 
       # ── 6. Install E2E Dependencies ───────────────────────────────────────
       - name: 📦  Install E2E dependencies
@@ -111,7 +119,7 @@ jobs:
         id: selenium
         working-directory: BrainBattleE2E
         env:
-          TEST_BASE_URL:     "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          TEST_BASE_URL:     "${{ env.TEST_BASE_URL }}"
           TEST_EMAIL:        "test@brainbattle.com"
           TEST_PASS:         "test1234"
           API_URL:           "https://brainbattlewebbackend.onrender.com"
