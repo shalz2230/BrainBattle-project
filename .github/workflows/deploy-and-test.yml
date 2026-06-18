@@ -108,14 +108,14 @@ jobs:
           SELENIUM_HEADLESS:   "true"
           CHROME_BIN:          ${{ steps.chrome.outputs.chrome-path }}
           CHROMEDRIVER_PATH:   ${{ steps.chromedriver.outputs.path }}
-          E2E_ARTIFACT_DIR:    "${{ github.workspace }}/Test Results/Screenshots"
+          E2E_ARTIFACT_DIR:    "${{ github.workspace }}/Test_Results/Screenshots"
         run: |
           # Create artifact directories
-          mkdir -p "${{ github.workspace }}/Test Results/Excel"
-          mkdir -p "${{ github.workspace }}/Test Results/HTML"
-          mkdir -p "${{ github.workspace }}/Test Results/Screenshots"
-          mkdir -p "${{ github.workspace }}/Test Results/Logs"
-          mkdir -p "${{ github.workspace }}/Test Results/Summary"
+          mkdir -p "${{ github.workspace }}/Test_Results/Excel"
+          mkdir -p "${{ github.workspace }}/Test_Results/HTML"
+          mkdir -p "${{ github.workspace }}/Test_Results/Screenshots"
+          mkdir -p "${{ github.workspace }}/Test_Results/Logs"
+          mkdir -p "${{ github.workspace }}/Test_Results/Summary"
 
           # Run Mocha tests
           set +e
@@ -125,9 +125,9 @@ jobs:
           EXIT=$?
           set -e
 
-          # Move generated reports to standardized Test Results path
-          [ -f selenium-report.xlsx ] && mv selenium-report.xlsx "${{ github.workspace }}/Test Results/Excel/Automation_Test_Report.xlsx"
-          [ -f execution-report.html ] && mv execution-report.html "${{ github.workspace }}/Test Results/HTML/execution-report.html"
+          # Move generated reports to standardized Test_Results path
+          [ -f selenium-report.xlsx ] && mv selenium-report.xlsx "${{ github.workspace }}/Test_Results/Excel/Automation_Test_Report.xlsx"
+          [ -f execution-report.html ] && mv execution-report.html "${{ github.workspace }}/Test_Results/HTML/execution-report.html"
           
           # Write summary
           {
@@ -144,18 +144,28 @@ jobs:
             fi
             echo ""
             echo "Live Report URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/execution-report.html"
-          } > "${{ github.workspace }}/Test Results/Summary/summary.md"
+          } > "${{ github.workspace }}/Test_Results/Summary/summary.md"
 
           exit $EXIT
         continue-on-error: true
 
-      # ── 8. Upload Artifacts ──────────────────────────────────────
+      # ── 8. Run k6 Load Tests ─────────────────────────────────────
+      - name: 🛠️  Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 📈  Run k6 Baseline Load Test
+        uses: grafana/run-k6-action@v1
+        with:
+          path: BrainBattleBackend/scripts/load-test.js
+          flags: --env BACKEND_URL=https://brainbattlewebbackend.onrender.com/
+
+      # ── 9. Upload Artifacts ──────────────────────────────────────
       - name: 📤  Upload Test Results Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: BrainBattle-Web-E2E-Results-${{ github.run_number }}
-          path: Test Results/
+          path: Test_Results/
           retention-days: 30
 
       # ── 9. Publish HTML report to GitHub Pages ───────────────────
@@ -163,7 +173,7 @@ jobs:
         if: always()
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: Test Results/HTML
+          folder: Test_Results/HTML
           branch: gh-pages
           target-folder: reports/latest
           clean: false
@@ -172,7 +182,7 @@ jobs:
         if: always()
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: Test Results/HTML
+          folder: Test_Results/HTML
           branch: gh-pages
           target-folder: reports/history/build-${{ github.run_number }}
           clean: false
@@ -181,4 +191,4 @@ jobs:
       - name: 📝  Write Step Summary
         if: always()
         run: |
-          cat "${{ github.workspace }}/Test Results/Summary/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ github.workspace }}/Test_Results/Summary/summary.md" >> "$GITHUB_STEP_SUMMARY"

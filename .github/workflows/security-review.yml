@@ -1,0 +1,78 @@
+name: 🛡️ Backend Security Review
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "BrainBattleBackend/**"
+      - ".github/workflows/security-review.yml"
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+concurrency:
+  group: security-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-scan:
+    name: 🛡️ Security Discovery, SAST & Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────
+      - name: ⬇️  Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Environment ─────────────────────────────────────
+      - name: 🟢  Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: BrainBattleE2E/package-lock.json
+
+      - name: 📦  Install ExcelJS support
+        working-directory: BrainBattleE2E
+        run: npm install
+
+      # ── 3. Technology Detection & Security Run ───────────────────
+      - name: 🔍 Detect Backend Technology & Run Security Audit
+        run: |
+          echo "====================================================="
+          echo "🔍 AUTOMATIC BACKEND TECHNOLOGY DETECTION"
+          echo "====================================================="
+          
+          # Detect technology based on folder inspection
+          if [ -f "BrainBattleBackend/requirements.txt" ]; then
+             echo "✅ Python Backend Framework Detected (Flask)"
+             echo "TECH=Python/Flask" >> "$GITHUB_ENV"
+          elif [ -f "BrainBattleBackend/package.json" ]; then
+             echo "✅ Node.js Backend Framework Detected"
+             echo "TECH=Node.js" >> "$GITHUB_ENV"
+          else
+             echo "✅ General Backend Framework Detected"
+             echo "TECH=Generic" >> "$GITHUB_ENV"
+          fi
+          
+          # Execute security generator script
+          cd BrainBattleE2E
+          node ../BrainBattleBackend/scripts/generateSecuritySuite.js
+
+      # ── 4. Upload Security Artifacts ─────────────────────────────
+      - name: 📤  Upload Vulnerability Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrainBattle-Security-Review-${{ github.run_number }}
+          path: Vulnerability_Test_Results/
+          retention-days: 30
+
+      # ── 5. Write GitHub Action Step Summary ──────────────────────
+      - name: 📝  Write Step Summary
+        if: always()
+        run: |
+          cat "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" >> "$GITHUB_STEP_SUMMARY"
