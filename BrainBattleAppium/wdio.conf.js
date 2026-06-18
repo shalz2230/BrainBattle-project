@@ -139,7 +139,18 @@ exports.config = {
         }
         
         const outPath = process.env.XLSX_OUTPUT || path.join(process.cwd(), 'appium-report.xlsx');
-        await reporter.generateReport(outPath);
+        try {
+            await reporter.generateReport(outPath);
+        } catch (err) {
+            if (err.code === 'EBUSY' || String(err).includes('EBUSY')) {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const altPath = outPath.replace('.xlsx', `-${timestamp}.xlsx`);
+                console.warn(`\n⚠️ Warning: ${outPath} is locked or open in Excel. Saving to: ${altPath}\n`);
+                await reporter.generateReport(altPath);
+            } else {
+                throw err;
+            }
+        }
     },
 };
 
