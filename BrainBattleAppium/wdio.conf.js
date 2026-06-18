@@ -64,18 +64,26 @@ exports.config = {
     },
 
     // ── Lifecycle hooks ────────────────────────────────────────────
-    before() {
+    onPrepare() {
+        const fs = require('fs');
+        const path = require('path');
+        const tempFile = path.join(process.cwd(), '.wdio-results.jsonl');
+        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        
         reporter.startRun();
     },
 
     afterTest(test, _ctx, result) {
-        // Map WDIO test metadata → reporter record
-        // Category & type are embedded in the suite title (e.g. "1. Functional Testing")
+        // Map WDIO test metadata
         const suiteTitle = (test.parent || '');
         const category   = _resolveCategory(suiteTitle);
         const type       = _resolveType(suiteTitle);
 
-        reporter.recordTest({
+        const fs = require('fs');
+        const path = require('path');
+        const tempFile = path.join(process.cwd(), '.wdio-results.jsonl');
+        
+        const r = {
             id:       _extractId(test.title),
             title:    test.title,
             category,
@@ -83,12 +91,25 @@ exports.config = {
             status:   result.passed ? 'passed' : result.pending ? 'skipped' : 'failed',
             duration: result.duration || 0,
             error:    result.error ? (result.error.message || String(result.error)).slice(0, 300) : '',
-        });
+        };
+        fs.appendFileSync(tempFile, JSON.stringify(r) + '\n');
     },
 
-    async after() {
-        const outPath = process.env.XLSX_OUTPUT
-            || path.join(process.cwd(), 'appium-report.xlsx');
+    async onComplete() {
+        const fs = require('fs');
+        const path = require('path');
+        const tempFile = path.join(process.cwd(), '.wdio-results.jsonl');
+        
+        if (fs.existsSync(tempFile)) {
+            const lines = fs.readFileSync(tempFile, 'utf8').split('\n').filter(Boolean);
+            lines.forEach(line => {
+                try {
+                    reporter.recordTest(JSON.parse(line));
+                } catch(e) {}
+            });
+        }
+        
+        const outPath = process.env.XLSX_OUTPUT || path.join(process.cwd(), 'appium-report.xlsx');
         await reporter.generateReport(outPath);
     },
 };

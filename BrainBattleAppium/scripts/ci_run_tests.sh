@@ -46,8 +46,15 @@ done
 
 # ── 3. Run WDIO + generate xlsx via wdio.conf.js after-hook ──────────
 echo ""
-echo "🧪 Running WDIO Appium test suite..."
+echo "🚀 Running WDIO Appium test suite..."
 cd "${APPIUM_DIR}"
+
+# IMPORTANT FIX: The Android Emulator Runner runs in a clean shell that
+# does not inherit the Node.js binaries installed by actions/setup-node.
+# We must inject the GitHub Actions PATH dynamically to find `npx`.
+if [ -n "${GITHUB_PATH:-}" ] && [ -f "${GITHUB_PATH}" ]; then
+  export PATH="$(cat "${GITHUB_PATH}" | tr '\n' ':')$PATH"
+fi
 
 export APPIUM_UDID="emulator-5554"
 export APPIUM_APP_PATH="${APK_PATH}"
