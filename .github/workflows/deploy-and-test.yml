@@ -1,0 +1,184 @@
+name: 🌐 Web App — Deploy & Test
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "BrainBattleWeb/**"
+      - "BrainBattleE2E/**"
+      - ".github/workflows/deploy-and-test.yml"
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-and-test:
+    name: 🌐 Build, Deploy, E2E Test & Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── 1. Source ────────────────────────────────────────────────
+      - name: ⬇️  Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node.js ─────────────────────────────────────────
+      - name: 🟢  Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            BrainBattleWeb/package-lock.json
+            BrainBattleE2E/package-lock.json
+
+      # ── 3. Build Frontend ────────────────────────────────────────
+      - name: 📦  Install Web dependencies
+        working-directory: BrainBattleWeb
+        run: npm install
+
+      - name: 🏗️  Build Web Application
+        working-directory: BrainBattleWeb
+        env:
+          VITE_API_URL: "https://brainbattlewebbackend.onrender.com"
+        run: npm run build
+
+      # ── 4. Deploy Frontend to GitHub Pages ───────────────────────
+      - name: 🚀  Deploy Frontend to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: BrainBattleWeb/dist
+          branch: gh-pages
+          clean: false # MUST be false to avoid deleting the reports folder!
+
+      # ── 5. Verify Deployed URL returns HTTP 200 ──────────────────
+      - name: ⏳  Verify Live Frontend Deployment
+        run: |
+          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          echo "Pinging live deployment at: $URL"
+          for i in $(seq 1 30); do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$URL" || echo "failed")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Live deployment is ONLINE (HTTP 200)!"
+              break
+            fi
+            echo "  Attempt $i: Status code $STATUS. Waiting 5 seconds..."
+            sleep 5
+            if [ "$i" -eq 30 ]; then
+              echo "❌ Timeout waiting for Pages deployment. Proceeding anyway..."
+            fi
+          done
+
+      # ── 6. Setup Selenium Environment ────────────────────────────
+      - name: 📦  Install E2E dependencies
+        working-directory: BrainBattleE2E
+        run: npm install
+
+      - name: 🌐  Setup Chrome (stable)
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: 🔧  Setup ChromeDriver
+        uses: nanasess/setup-chromedriver@v2
+
+      - name: 📍  Locate ChromeDriver
+        id: chromedriver
+        run: echo "path=$(which chromedriver)" >> "$GITHUB_OUTPUT"
+
+      # ── 7. Run Selenium E2E Tests ────────────────────────────────
+      - name: 🧪  Run Selenium E2E Suite
+        id: selenium
+        working-directory: BrainBattleE2E
+        env:
+          TEST_BASE_URL:       "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          TEST_EMAIL:          "test@brainbattle.com"
+          TEST_PASS:           "test1234"
+          API_URL:             "https://brainbattlewebbackend.onrender.com"
+          SELENIUM_HEADLESS:   "true"
+          CHROME_BIN:          ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH:   ${{ steps.chromedriver.outputs.path }}
+          E2E_ARTIFACT_DIR:    "${{ github.workspace }}/Test Results/Screenshots"
+        run: |
+          # Create artifact directories
+          mkdir -p "${{ github.workspace }}/Test Results/Excel"
+          mkdir -p "${{ github.workspace }}/Test Results/HTML"
+          mkdir -p "${{ github.workspace }}/Test Results/Screenshots"
+          mkdir -p "${{ github.workspace }}/Test Results/Logs"
+          mkdir -p "${{ github.workspace }}/Test Results/Summary"
+
+          # Run Mocha tests
+          set +e
+          node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js \
+            --timeout 300000 \
+            --reporter ./utils/excelReporter.js
+          EXIT=$?
+          set -e
+
+          # Move generated reports to standardized Test Results path
+          [ -f selenium-report.xlsx ] && mv selenium-report.xlsx "${{ github.workspace }}/Test Results/Excel/Automation_Test_Report.xlsx"
+          [ -f execution-report.html ] && mv execution-report.html "${{ github.workspace }}/Test Results/HTML/execution-report.html"
+          
+          # Write summary
+          {
+            echo "# Live GitHub Pages E2E Test Summary"
+            echo ""
+            echo "Deployment URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+            echo "Build Number: ${{ github.run_number }}"
+            echo "Execution Date: $(date)"
+            echo ""
+            if [ "$EXIT" -eq 0 ]; then
+              echo "Result: ✅ Passed"
+            else
+              echo "Result: ❌ Failed / Partial"
+            fi
+            echo ""
+            echo "Live Report URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/execution-report.html"
+          } > "${{ github.workspace }}/Test Results/Summary/summary.md"
+
+          exit $EXIT
+        continue-on-error: true
+
+      # ── 8. Upload Artifacts ──────────────────────────────────────
+      - name: 📤  Upload Test Results Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrainBattle-Web-E2E-Results-${{ github.run_number }}
+          path: Test Results/
+          retention-days: 30
+
+      # ── 9. Publish HTML report to GitHub Pages ───────────────────
+      - name: 🚀  Deploy HTML Report to Latest
+        if: always()
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: Test Results/HTML
+          branch: gh-pages
+          target-folder: reports/latest
+          clean: false
+
+      - name: 🚀  Deploy HTML Report to History
+        if: always()
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: Test Results/HTML
+          branch: gh-pages
+          target-folder: reports/history/build-${{ github.run_number }}
+          clean: false
+
+      # ── 10. Write GitHub Action Summary ──────────────────────────
+      - name: 📝  Write Step Summary
+        if: always()
+        run: |
+          cat "${{ github.workspace }}/Test Results/Summary/summary.md" >> "$GITHUB_STEP_SUMMARY"

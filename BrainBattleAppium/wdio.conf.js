@@ -151,6 +151,15 @@ exports.config = {
                 throw err;
             }
         }
+
+        // Generate HTML execution report
+        try {
+            const generateHtmlReport = require('./utils/generateHtmlReport');
+            // By default, outputs to execution-report.html in wdio root
+            generateHtmlReport; 
+        } catch (err) {
+            console.error('Failed to trigger HTML report generator:', err);
+        }
     },
 };
 

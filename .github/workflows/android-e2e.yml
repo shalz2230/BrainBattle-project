@@ -1,23 +1,4 @@
-##############################################################################
-#
-#  BrainBattle — 📱 Mobile App Tests & Report (Appium)
-#
-#  What it does:
-#    1. Builds the debug APK from source.
-#    2. Boots an Android API 29 emulator.
-#    3. Calls BrainBattleAppium/scripts/ci_run_tests.sh (committed file —
-#       no heredoc / indentation issues) which:
-#         a. Installs APK via adb
-#         b. Starts Appium server with health-check polling
-#         c. Runs npx wdio run wdio.conf.js
-#         d. wdio.conf.js after() hook writes appium-report.xlsx
-#         e. Falls back to generateFallbackReport.js if after() never fired
-#    4. Uploads ONLY the .xlsx artifact (no logs / html / xml).
-#
-#  Triggers: push / PR to main | master + manual dispatch
-#
-##############################################################################
-name: 📱 Mobile App — Appium Report
+name: 📱 Mobile App — Deploy & Test
 
 on:
   push:
@@ -25,13 +6,18 @@ on:
     paths:
       - "BrainBattle/**"
       - "BrainBattleAppium/**"
-      - ".github/workflows/mobile_report.yml"
+      - ".github/workflows/android-e2e.yml"
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 concurrency:
-  group: mobile-report-${{ github.ref }}
+  group: android-e2e-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -40,8 +26,8 @@ env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g"
 
 jobs:
-  appium-report:
-    name: 📱 Appium E2E — Excel Report
+  android-e2e:
+    name: 📱 Build, Run Appium E2E & Publish Reports
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -103,10 +89,6 @@ jobs:
         run: chmod +x BrainBattleAppium/scripts/ci_run_tests.sh
 
       # ── 8. Boot emulator & run the script ────────────────────────
-      #   IMPORTANT: reactivecircus/android-emulator-runner runs
-      #   `script:` as a SINGLE /usr/bin/sh -c command. We pass a
-      #   one-liner that calls our committed .sh file — no multi-line
-      #   backslash continuations, no heredoc indentation bugs.
       - name: 📱  Boot emulator & run Appium tests
         uses: reactivecircus/android-emulator-runner@v2
         id: appium_run
@@ -121,34 +103,75 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash "$GITHUB_WORKSPACE/BrainBattleAppium/scripts/ci_run_tests.sh"
 
-      # ── 9. Guarantee xlsx exists even if step 8 errored ──────────
-      - name: 📄  Ensure xlsx report exists (final fallback)
+      # ── 9. Collect and Standardize Test Results ──────────────────
+      - name: 📁 Prepare Test Results Structure
         if: always()
         run: |
-          REPORT="${GITHUB_WORKSPACE}/brainbattle-mobile-test-report.xlsx"
-          if [ ! -f "$REPORT" ]; then
-            echo "⚠️  Report missing — generating emergency fallback..."
-            cd BrainBattleAppium
-            node utils/generateFallbackReport.js \
-              --output "$REPORT" \
-              --exit-code 1
-          else
-            echo "✅ Report already exists at: $REPORT"
+          mkdir -p "${{ github.workspace }}/Test Results/Excel"
+          mkdir -p "${{ github.workspace }}/Test Results/HTML"
+          mkdir -p "${{ github.workspace }}/Test Results/Screenshots"
+          mkdir -p "${{ github.workspace }}/Test Results/Logs"
+          mkdir -p "${{ github.workspace }}/Test Results/Summary"
+
+          # Copy generated reports from Appium folder if they exist
+          [ -f "${{ github.workspace }}/BrainBattleAppium/appium-report.xlsx" ] && cp "${{ github.workspace }}/BrainBattleAppium/appium-report.xlsx" "${{ github.workspace }}/Test Results/Excel/Automation_Test_Report.xlsx"
+          [ -f "${{ github.workspace }}/BrainBattleAppium/execution-report.html" ] && cp "${{ github.workspace }}/BrainBattleAppium/execution-report.html" "${{ github.workspace }}/Test Results/HTML/execution-report.html"
+          
+          # Generate fallback HTML report if missing
+          if [ ! -f "${{ github.workspace }}/Test Results/HTML/execution-report.html" ]; then
+             echo "Generating fallback HTML..."
+             cd BrainBattleAppium
+             export HTML_OUTPUT="${{ github.workspace }}/Test Results/HTML/execution-report.html"
+             node utils/generateHtmlReport.js
           fi
 
-      # ── 10. Upload ONLY the xlsx ──────────────────────────────────
-      - name: 📤  Upload Mobile Test Report (.xlsx)
+          # Build Action Summary Markdown
+          STATUS="${{ steps.appium_run.outcome }}"
+          [ "$STATUS" = "success" ] && BADGE="✅ Passed" || BADGE="❌ Failed / Partial"
+          {
+            echo "# Android Appium Test Summary"
+            echo ""
+            echo "Build Number: ${{ github.run_number }}"
+            echo "Execution Date: $(date)"
+            echo "Result: $BADGE"
+            echo ""
+            echo "Report URL:"
+            echo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/execution-report.html"
+          } > "${{ github.workspace }}/Test Results/Summary/summary.md"
+
+      # ── 10. Upload Artifacts ──────────────────────────────────────
+      - name: 📤  Upload Mobile E2E Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: BrainBattle-Mobile-Test-Report-${{ github.run_number }}
-          path: brainbattle-mobile-test-report.xlsx
+          name: BrainBattle-Mobile-E2E-Results-${{ github.run_number }}
+          path: Test Results/
           retention-days: 30
-          if-no-files-found: error
 
-      # ── 11. Step Summary ─────────────────────────────────────────
+      # ── 11. Publish HTML report to GitHub Pages ───────────────────
+      - name: 🚀  Deploy HTML Report to Latest
+        if: always()
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: Test Results/HTML
+          branch: gh-pages
+          target-folder: reports/latest
+          clean: false
+
+      - name: 🚀  Deploy HTML Report to History
+        if: always()
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: Test Results/HTML
+          branch: gh-pages
+          target-folder: reports/history/build-${{ github.run_number }}
+          clean: false
+
+      # ── 12. Write GitHub Action Summary ──────────────────────────
       - name: 📝  Write Step Summary
         if: always()
         run: |
+          cat "${{ github.workspace }}/Test Results/Summary/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           cd BrainBattleAppium
           node utils/generateSummary.js

@@ -110,6 +110,14 @@ class ExcelReporter extends Mocha.reporters.Base {
       await workbook.xlsx.writeFile('selenium-report.xlsx');
       console.log('Excel report saved to selenium-report.xlsx');
 
+      // Generate HTML execution report
+      try {
+          const htmlGenerator = require('./htmlReportGenerator');
+          htmlGenerator.generateHtml(this.results, 'execution-report.html');
+      } catch (err) {
+          console.error('Failed to generate HTML report:', err);
+      }
+
       if (process.env.GITHUB_STEP_SUMMARY) {
         const fs = require('fs');
         let summaryMd = '## E2E Selenium Test Results\n\n';
