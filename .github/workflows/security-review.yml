@@ -33,7 +33,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: BrainBattleE2E/package-lock.json
 
-      - name: 📦  Install ExcelJS support
+      - name: 📦  Install ExcelJS & dependencies
         working-directory: BrainBattleE2E
         run: npm install
 
@@ -43,8 +43,7 @@ jobs:
           echo "====================================================="
           echo "🔍 AUTOMATIC BACKEND TECHNOLOGY DETECTION"
           echo "====================================================="
-          
-          # Detect technology based on folder inspection
+
           if [ -f "BrainBattleBackend/requirements.txt" ]; then
              echo "✅ Python Backend Framework Detected (Flask)"
              echo "TECH=Python/Flask" >> "$GITHUB_ENV"
@@ -55,10 +54,9 @@ jobs:
              echo "✅ General Backend Framework Detected"
              echo "TECH=Generic" >> "$GITHUB_ENV"
           fi
-          
-          # Run security generator script.
-          # NODE_PATH tells Node where to find shared node_modules (exceljs lives in BrainBattleE2E).
-          # The script itself uses __dirname-relative paths, so we run it from the workspace root.
+
+          # NODE_PATH makes Node resolve 'exceljs' from BrainBattleE2E/node_modules
+          # even though the script file lives in BrainBattleBackend/scripts/
           NODE_PATH="${GITHUB_WORKSPACE}/BrainBattleE2E/node_modules" \
             node BrainBattleBackend/scripts/generateSecuritySuite.js
 
@@ -75,15 +73,38 @@ jobs:
       - name: 📝  Write Step Summary
         if: always()
         run: |
-          if [ -f "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" ]; then
-            cat "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          EXEC_FILE="${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md"
+          REV_FILE="${{ github.workspace }}/Vulnerability_Test_Results/security-review.md"
+
+          if [ -f "$EXEC_FILE" ]; then
+            cat "$EXEC_FILE" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "---" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "⚠️ executive-summary.md was not generated." >> "$GITHUB_STEP_SUMMARY"
+            echo "## ⚠️ Executive summary not generated — check previous step logs." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [ -f "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" ]; then
-            cat "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$REV_FILE" ]; then
+            cat "$REV_FILE" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "⚠️ security-review.md was not generated." >> "$GITHUB_STEP_SUMMARY"
+            echo "## ⚠️ Security review not generated — check previous step logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ── 6. Fail if Critical vulnerabilities were found ───────────
+      - name: 🚨  Enforce Zero-Critical Policy
+        if: always()
+        run: |
+          EXEC_FILE="${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md"
+          if [ -f "$EXEC_FILE" ]; then
+            CRITICAL=$(grep -oP '🔴 Critical \| \*\*\K[0-9]+' "$EXEC_FILE" || echo "0")
+            echo "Critical findings detected: $CRITICAL"
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo ""
+              echo "❌ BUILD FAILED: ${CRITICAL} Critical severity vulnerability/vulnerabilities found."
+              echo "   Resolve all Critical findings before merging to main."
+              exit 1
+            else
+              echo "✅ Zero Critical vulnerabilities — policy check passed."
+            fi
           fi
