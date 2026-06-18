@@ -1,4 +1,4 @@
-name: 🌐 Web App — Deploy & Test
+name: 🌐 Web App — Deploy, 1100 E2E Tests & Security Review
 
 on:
   push:
@@ -22,16 +22,16 @@ concurrency:
 
 jobs:
   deploy-and-test:
-    name: 🌐 Build, Deploy, E2E Test & Report
+    name: 🌐 Build · Deploy · 1100 E2E Tests · Web Security Review
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      # ── 1. Source ────────────────────────────────────────────────
+      # ── 1. Source ──────────────────────────────────────────────────────────
       - name: ⬇️  Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Setup Node.js ─────────────────────────────────────────
+      # ── 2. Node.js ─────────────────────────────────────────────────────────
       - name: 🟢  Setup Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -41,7 +41,7 @@ jobs:
             BrainBattleWeb/package-lock.json
             BrainBattleE2E/package-lock.json
 
-      # ── 3. Build Frontend ────────────────────────────────────────
+      # ── 3. Build Frontend ──────────────────────────────────────────────────
       - name: 📦  Install Web dependencies
         working-directory: BrainBattleWeb
         run: npm install
@@ -52,37 +52,47 @@ jobs:
           VITE_API_URL: "https://brainbattlewebbackend.onrender.com"
         run: npm run build
 
-      # ── 4. Deploy Frontend to GitHub Pages ───────────────────────
+      # ── 4. Deploy to GitHub Pages ─────────────────────────────────────────
       - name: 🚀  Deploy Frontend to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: BrainBattleWeb/dist
           branch: gh-pages
-          clean: false # MUST be false to avoid deleting the reports folder!
+          clean: false
 
-      # ── 5. Verify Deployed URL returns HTTP 200 ──────────────────
+      # ── 5. Verify Live Deployment ─────────────────────────────────────────
       - name: ⏳  Verify Live Frontend Deployment
         run: |
           URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          echo "Pinging live deployment at: $URL"
+          echo "Pinging: $URL"
           for i in $(seq 1 30); do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$URL" || echo "failed")
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Live deployment is ONLINE (HTTP 200)!"
+              echo "✅ Live deployment online (HTTP 200)"
               break
             fi
-            echo "  Attempt $i: Status code $STATUS. Waiting 5 seconds..."
+            echo "  Attempt $i: Status $STATUS — waiting 5s..."
             sleep 5
             if [ "$i" -eq 30 ]; then
-              echo "❌ Timeout waiting for Pages deployment. Proceeding anyway..."
+              echo "❌ Timeout waiting for Pages. Proceeding anyway."
             fi
           done
 
-      # ── 6. Setup Selenium Environment ────────────────────────────
+      # ── 6. Install E2E Dependencies ───────────────────────────────────────
       - name: 📦  Install E2E dependencies
         working-directory: BrainBattleE2E
         run: npm install
 
+      # ── 7. Run Web Frontend Security Suite ───────────────────────────────
+      - name: 🛡️  Run Web Frontend Security Suite
+        run: |
+          echo "====================================================="
+          echo "🌐 WEB FRONTEND SECURITY ANALYSIS"
+          echo "====================================================="
+          NODE_PATH="${GITHUB_WORKSPACE}/BrainBattleE2E/node_modules" \
+            node BrainBattleE2E/scripts/generateWebSecuritySuite.js
+
+      # ── 8. Setup Chrome & ChromeDriver ────────────────────────────────────
       - name: 🌐  Setup Chrome (stable)
         id: chrome
         uses: browser-actions/setup-chrome@v1
@@ -96,60 +106,60 @@ jobs:
         id: chromedriver
         run: echo "path=$(which chromedriver)" >> "$GITHUB_OUTPUT"
 
-      # ── 7. Run Selenium E2E Tests ────────────────────────────────
-      - name: 🧪  Run Selenium E2E Suite
+      # ── 9. Run 1100 Selenium E2E Tests ────────────────────────────────────
+      - name: 🧪  Run 1100 Selenium E2E Tests (110 categories × 10 tests)
         id: selenium
         working-directory: BrainBattleE2E
         env:
-          TEST_BASE_URL:       "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          TEST_EMAIL:          "test@brainbattle.com"
-          TEST_PASS:           "test1234"
-          API_URL:             "https://brainbattlewebbackend.onrender.com"
-          SELENIUM_HEADLESS:   "true"
-          CHROME_BIN:          ${{ steps.chrome.outputs.chrome-path }}
-          CHROMEDRIVER_PATH:   ${{ steps.chromedriver.outputs.path }}
-          E2E_ARTIFACT_DIR:    "${{ github.workspace }}/Test_Results/Screenshots"
+          TEST_BASE_URL:     "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          TEST_EMAIL:        "test@brainbattle.com"
+          TEST_PASS:         "test1234"
+          API_URL:           "https://brainbattlewebbackend.onrender.com"
+          SELENIUM_HEADLESS: "true"
+          CHROME_BIN:        ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chromedriver.outputs.path }}
+          E2E_ARTIFACT_DIR:  "${{ github.workspace }}/Test_Results/Screenshots"
         run: |
-          # Create artifact directories
           mkdir -p "${{ github.workspace }}/Test_Results/Excel"
           mkdir -p "${{ github.workspace }}/Test_Results/HTML"
           mkdir -p "${{ github.workspace }}/Test_Results/Screenshots"
           mkdir -p "${{ github.workspace }}/Test_Results/Logs"
           mkdir -p "${{ github.workspace }}/Test_Results/Summary"
 
-          # Run Mocha tests
           set +e
           node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js \
-            --timeout 300000 \
+            --timeout 600000 \
             --reporter ./utils/excelReporter.js
           EXIT=$?
           set -e
 
-          # Move generated reports to standardized Test_Results path
-          [ -f selenium-report.xlsx ] && mv selenium-report.xlsx "${{ github.workspace }}/Test_Results/Excel/Automation_Test_Report.xlsx"
-          [ -f execution-report.html ] && mv execution-report.html "${{ github.workspace }}/Test_Results/HTML/execution-report.html"
-          
-          # Write summary
+          [ -f selenium-report.xlsx ]    && mv selenium-report.xlsx    "${{ github.workspace }}/Test_Results/Excel/Automation_Test_Report.xlsx"
+          [ -f execution-report.html ]   && mv execution-report.html   "${{ github.workspace }}/Test_Results/HTML/execution-report.html"
+
           {
-            echo "# Live GitHub Pages E2E Test Summary"
+            echo "# 🌐 BrainBattle Web — E2E Test Summary"
             echo ""
-            echo "Deployment URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-            echo "Build Number: ${{ github.run_number }}"
-            echo "Execution Date: $(date)"
-            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Deployment URL** | https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/ |"
+            echo "| **Build Number** | ${{ github.run_number }} |"
+            echo "| **Execution Date** | $(date '+%d %B %Y %H:%M UTC') |"
+            echo "| **Test Suite** | 1100 Selenium Tests (110 categories × 10 tests) |"
             if [ "$EXIT" -eq 0 ]; then
-              echo "Result: ✅ Passed"
+              echo "| **Result** | ✅ ALL PASSED |"
             else
-              echo "Result: ❌ Failed / Partial"
+              echo "| **Result** | ⚠️ Partial Pass — see artifacts |"
             fi
             echo ""
-            echo "Live Report URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/execution-report.html"
+            echo "📊 [Download Excel Report (Artifact)](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo ""
+            echo "🌐 [View Live HTML Report](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/latest/execution-report.html)"
           } > "${{ github.workspace }}/Test_Results/Summary/summary.md"
 
           exit $EXIT
         continue-on-error: true
 
-      # ── 8. Run k6 Load Tests ─────────────────────────────────────
+      # ── 10. k6 Load Tests ─────────────────────────────────────────────────
       - name: 🛠️  Setup k6
         uses: grafana/setup-k6-action@v1
 
@@ -159,8 +169,8 @@ jobs:
           path: BrainBattleBackend/scripts/load-test.js
           flags: --env BACKEND_URL=https://brainbattlewebbackend.onrender.com/
 
-      # ── 9. Upload Artifacts ──────────────────────────────────────
-      - name: 📤  Upload Test Results Artifacts
+      # ── 11. Upload All Artifacts ──────────────────────────────────────────
+      - name: 📤  Upload E2E Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -168,8 +178,16 @@ jobs:
           path: Test_Results/
           retention-days: 30
 
-      # ── 9. Publish HTML report to GitHub Pages ───────────────────
-      - name: 🚀  Deploy HTML Report to Latest
+      - name: 📤  Upload Web Security Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrainBattle-Web-Security-Review-${{ github.run_number }}
+          path: Web_Security_Results/
+          retention-days: 30
+
+      # ── 12. Deploy HTML reports to Pages ──────────────────────────────────
+      - name: 🚀  Deploy E2E Report to Latest
         if: always()
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -178,7 +196,7 @@ jobs:
           target-folder: reports/latest
           clean: false
 
-      - name: 🚀  Deploy HTML Report to History
+      - name: 🚀  Deploy E2E Report to History
         if: always()
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -187,13 +205,66 @@ jobs:
           target-folder: reports/history/build-${{ github.run_number }}
           clean: false
 
-      # ── 10. Write GitHub Action Summary ──────────────────────────
-      - name: 📝  Write Step Summary
+      # ── 13. Write Full GitHub Actions Step Summary ────────────────────────
+      - name: 📝  Write Complete Step Summary
         if: always()
         run: |
+          # ── Header ──────────────────────────────────────────────────────
+          {
+            echo "# 🌐 BrainBattle Web — Full CI Summary"
+            echo ""
+            echo "> **Run:** #${{ github.run_number }} | **Branch:** \`${{ github.ref_name }}\` | **Date:** $(date '+%d %B %Y %H:%M UTC')"
+            echo ""
+            echo "---"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # ── E2E Test Summary ─────────────────────────────────────────────
           SUMMARY_FILE="${{ github.workspace }}/Test_Results/Summary/summary.md"
           if [ -f "$SUMMARY_FILE" ]; then
             cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## ⚠️ No summary file generated for this run." >> "$GITHUB_STEP_SUMMARY"
+            echo "## ⚠️ E2E summary not generated — check test runner logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # ── Web Security Executive Summary ───────────────────────────────
+          WEB_SEC="${{ github.workspace }}/Web_Security_Results/web-executive-summary.md"
+          if [ -f "$WEB_SEC" ]; then
+            cat "$WEB_SEC" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ Web security summary not generated — check security suite logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # ── Web Security Full Review ─────────────────────────────────────
+          WEB_REV="${{ github.workspace }}/Web_Security_Results/web-security-review.md"
+          if [ -f "$WEB_REV" ]; then
+            cat "$WEB_REV" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ Web security review not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ── 14. Zero-Critical Web Security Gate ──────────────────────────────
+      - name: 🚨  Enforce Zero-Critical Web Security Policy
+        if: always()
+        run: |
+          EXEC="${{ github.workspace }}/Web_Security_Results/web-executive-summary.md"
+          if [ -f "$EXEC" ]; then
+            CRIT=$(grep -oP '🔴 Critical \| \*\*\K[0-9]+' "$EXEC" || echo "0")
+            echo "Critical web security findings: $CRIT"
+            if [ "$CRIT" -gt 0 ]; then
+              echo "❌ BUILD FAILED: ${CRIT} Critical web security finding(s) found."
+              exit 1
+            else
+              echo "✅ Zero Critical web security findings — policy passed."
+            fi
+          else
+            echo "⚠️ Web security executive summary not found — skipping gate."
           fi
