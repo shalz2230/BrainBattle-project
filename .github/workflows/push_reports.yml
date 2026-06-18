@@ -73,11 +73,11 @@ jobs:
 
       - name: Install web app dependencies
         working-directory: BrainBattleWeb
-        run: npm ci
+        run: npm install
 
       - name: Install E2E dependencies
         working-directory: BrainBattleE2E
-        run: npm ci
+        run: npm install
 
       - name: Setup Chrome
         id: setup_chrome

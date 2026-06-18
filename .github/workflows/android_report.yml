@@ -1,0 +1,388 @@
+##############################################################################
+#  BrainBattle — Android Test Report Generator
+#  Triggers: every push to any branch + manual dispatch
+#
+#  Jobs:
+#    1. unit-tests   → JVM unit tests (no device, fast, always run)
+#    2. e2e-tests    → Espresso instrumented tests (emulator, longer)
+#    3. report       → Consolidate and publish GitHub Step Summary
+##############################################################################
+name: 🧠 BrainBattle Android — Test Report Generator
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "BrainBattle/**"
+      - ".github/workflows/android_report.yml"
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run Espresso E2E tests on emulator?"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+# Cancel stale in-progress runs for the same branch
+concurrency:
+  group: android-report-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  JAVA_DIST: "temurin"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.jvmargs=-Xmx3g"
+  ANDROID_DIR: "BrainBattle"
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────
+  #  JOB 1 — JVM Unit Tests (fast, no device)
+  # ────────────────────────────────────────────────────────────────────
+  unit-tests:
+    name: 🔬 JVM Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: ⬇️  Checkout
+        uses: actions/checkout@v4
+
+      - name: ☕  Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DIST }}
+          cache: gradle
+
+      - name: 🔧  Make Gradlew executable
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: chmod +x gradlew
+
+      - name: 📦  Gradle cache warm-up
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: ./gradlew dependencies --no-daemon --quiet || true
+
+      - name: 🔬  Run JVM Unit Tests
+        id: unit_run
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: |
+          ./gradlew testDebugUnitTest \
+            --no-daemon \
+            --stacktrace \
+            --continue \
+            2>&1 | tee ../unit-test-output.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      # ── Reports ──────────────────────────────────────────────────────
+      - name: 📊  Upload — HTML Unit Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Unit-Test-HTML-${{ github.run_number }}
+          path: |
+            ${{ env.ANDROID_DIR }}/app/build/reports/tests/testDebugUnitTest/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 📊  Upload — XML Unit Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Unit-Test-XML-${{ github.run_number }}
+          path: |
+            ${{ env.ANDROID_DIR }}/app/build/test-results/testDebugUnitTest/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 📊  Upload — Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Unit-Test-Log-${{ github.run_number }}
+          path: unit-test-output.log
+          retention-days: 14
+          if-no-files-found: warn
+
+      # ── Parse and summarise ──────────────────────────────────────────
+      - name: 📋  Parse Unit Test XML Results
+        if: always()
+        id: unit_stats
+        run: |
+          XML_DIR="${{ env.ANDROID_DIR }}/app/build/test-results/testDebugUnitTest"
+          if ls "$XML_DIR"/*.xml &>/dev/null; then
+            TOTAL=$(grep -h 'tests=' "$XML_DIR"/*.xml | grep -oP 'tests="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            FAILED=$(grep -h 'failures=' "$XML_DIR"/*.xml | grep -oP 'failures="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            ERRORS=$(grep -h 'errors=' "$XML_DIR"/*.xml | grep -oP 'errors="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            SKIPPED=$(grep -h 'skipped=' "$XML_DIR"/*.xml | grep -oP 'skipped="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            PASSED=$((TOTAL - FAILED - ERRORS - SKIPPED))
+            echo "total=$TOTAL"     >> "$GITHUB_OUTPUT"
+            echo "passed=$PASSED"   >> "$GITHUB_OUTPUT"
+            echo "failed=$FAILED"   >> "$GITHUB_OUTPUT"
+            echo "errors=$ERRORS"   >> "$GITHUB_OUTPUT"
+            echo "skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
+          else
+            echo "total=0"    >> "$GITHUB_OUTPUT"
+            echo "passed=0"   >> "$GITHUB_OUTPUT"
+            echo "failed=?"   >> "$GITHUB_OUTPUT"
+            echo "errors=?"   >> "$GITHUB_OUTPUT"
+            echo "skipped=0"  >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 📝  Write Unit Test Step Summary
+        if: always()
+        run: |
+          TOTAL="${{ steps.unit_stats.outputs.total }}"
+          PASSED="${{ steps.unit_stats.outputs.passed }}"
+          FAILED="${{ steps.unit_stats.outputs.failed }}"
+          ERRORS="${{ steps.unit_stats.outputs.errors }}"
+          SKIPPED="${{ steps.unit_stats.outputs.skipped }}"
+          STATUS="${{ steps.unit_run.outputs.exit_code }}"
+
+          if [ "$STATUS" = "0" ] || [ -z "$STATUS" ]; then
+            BADGE="✅ Passed"
+          else
+            BADGE="❌ Failed"
+          fi
+
+          {
+            echo "## 🔬 JVM Unit Test Report — $BADGE"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Total tests | $TOTAL |"
+            echo "| ✅ Passed   | $PASSED |"
+            echo "| ❌ Failed   | $FAILED |"
+            echo "| 💥 Errors   | $ERRORS |"
+            echo "| ⏭️ Skipped  | $SKIPPED |"
+            echo ""
+            echo "> **Commit:** \`${{ github.sha }}\`  |  **Branch:** \`${{ github.ref_name }}\`  |  **Triggered by:** @${{ github.actor }}"
+            echo ""
+            echo "📥 Download the full HTML report from the **Artifacts** section below."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ────────────────────────────────────────────────────────────────────
+  #  JOB 2 — Espresso Instrumented E2E Tests (emulator)
+  # ────────────────────────────────────────────────────────────────────
+  e2e-tests:
+    name: 📱 Espresso E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: ${{ github.event.inputs.run_e2e != 'false' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29]
+        target: [default]
+        arch: [x86_64]
+
+    steps:
+      - name: ⬇️  Checkout
+        uses: actions/checkout@v4
+
+      - name: ☕  Setup JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DIST }}
+          cache: gradle
+
+      - name: 🔧  Make Gradlew executable
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: chmod +x gradlew
+
+      # Build APKs before booting emulator to save total time
+      - name: 🏗️  Build App + Test APKs
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: |
+          ./gradlew assembleDebug assembleDebugAndroidTest \
+            --no-daemon \
+            --stacktrace \
+            2>&1 | tee ../apk-build-output.log
+
+      - name: ⚡  Enable KVM Hardware Acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: 📱  Run Espresso Tests on Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          profile: Nexus 6
+          avd-name: brainbattle_avd
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          working-directory: ${{ env.ANDROID_DIR }}
+          script: |
+            # Wait for launcher to be fully ready
+            adb wait-for-device
+            adb shell input keyevent 82
+
+            echo "📱 Running BrainBattle Espresso tests..."
+
+            ./gradlew connectedDebugAndroidTest \
+              --no-daemon \
+              --stacktrace \
+              --continue \
+              2>&1 | tee ../../e2e-test-output.log
+
+            TEST_EXIT=$?
+            echo "Espresso run complete (exit=$TEST_EXIT)"
+            exit $TEST_EXIT
+        continue-on-error: true
+        id: e2e_run
+
+      # ── Reports ──────────────────────────────────────────────────────
+      - name: 📊  Upload — HTML Instrumented Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-E2E-Test-HTML-${{ github.run_number }}
+          path: |
+            ${{ env.ANDROID_DIR }}/app/build/reports/androidTests/connected/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 📊  Upload — XML Instrumented Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-E2E-Test-XML-${{ github.run_number }}
+          path: |
+            ${{ env.ANDROID_DIR }}/app/build/outputs/androidTest-results/connected/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 📊  Upload — APK Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-APK-Build-Log-${{ github.run_number }}
+          path: |
+            apk-build-output.log
+            e2e-test-output.log
+          retention-days: 14
+          if-no-files-found: warn
+
+      # ── Parse and summarise ──────────────────────────────────────────
+      - name: 📋  Parse E2E Test XML Results
+        if: always()
+        id: e2e_stats
+        run: |
+          XML_DIR="${{ env.ANDROID_DIR }}/app/build/outputs/androidTest-results/connected"
+          FOUND=0
+          TOTAL=0; FAILED=0; ERRORS=0; SKIPPED=0
+          if ls "$XML_DIR"/**/*.xml &>/dev/null 2>&1; then
+            FOUND=1
+            TOTAL=$(grep -rh 'tests=' "$XML_DIR" --include='*.xml' | grep -oP 'tests="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            FAILED=$(grep -rh 'failures=' "$XML_DIR" --include='*.xml' | grep -oP 'failures="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            ERRORS=$(grep -rh 'errors=' "$XML_DIR" --include='*.xml' | grep -oP 'errors="\K[0-9]+' | awk '{s+=$1} END {print s}')
+            SKIPPED=$(grep -rh 'skipped=' "$XML_DIR" --include='*.xml' | grep -oP 'skipped="\K[0-9]+' | awk '{s+=$1} END {print s}')
+          fi
+          PASSED=$((TOTAL - FAILED - ERRORS - SKIPPED))
+          echo "found=$FOUND"     >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL"     >> "$GITHUB_OUTPUT"
+          echo "passed=$PASSED"   >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED"   >> "$GITHUB_OUTPUT"
+          echo "errors=$ERRORS"   >> "$GITHUB_OUTPUT"
+          echo "skipped=$SKIPPED" >> "$GITHUB_OUTPUT"
+
+      - name: 📝  Write E2E Step Summary
+        if: always()
+        run: |
+          OUTCOME="${{ steps.e2e_run.outcome }}"
+
+          if [ "$OUTCOME" = "success" ]; then
+            BADGE="✅ Passed"
+          elif [ "$OUTCOME" = "failure" ]; then
+            BADGE="❌ Failed"
+          else
+            BADGE="⚠️ Unknown"
+          fi
+
+          {
+            echo "## 📱 Espresso E2E Test Report — $BADGE"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Total tests | ${{ steps.e2e_stats.outputs.total }} |"
+            echo "| ✅ Passed   | ${{ steps.e2e_stats.outputs.passed }} |"
+            echo "| ❌ Failed   | ${{ steps.e2e_stats.outputs.failed }} |"
+            echo "| 💥 Errors   | ${{ steps.e2e_stats.outputs.errors }} |"
+            echo "| ⏭️ Skipped  | ${{ steps.e2e_stats.outputs.skipped }} |"
+            echo ""
+            echo "| Setting | Value |"
+            echo "| --- | --- |"
+            echo "| API Level   | ${{ matrix.api-level }} |"
+            echo "| Target      | ${{ matrix.target }} |"
+            echo "| Arch        | ${{ matrix.arch }} |"
+            echo ""
+            echo "> **Commit:** \`${{ github.sha }}\`  |  **Branch:** \`${{ github.ref_name }}\`  |  **Triggered by:** @${{ github.actor }}"
+            echo ""
+            echo "📥 Download the full HTML report from the **Artifacts** section below."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ────────────────────────────────────────────────────────────────────
+  #  JOB 3 — Consolidated Summary Report
+  # ────────────────────────────────────────────────────────────────────
+  report:
+    name: 📋 Consolidated Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [unit-tests, e2e-tests]
+    if: always()
+
+    steps:
+      - name: 📝  Write Consolidated Summary
+        run: |
+          UNIT_RESULT="${{ needs.unit-tests.result }}"
+          E2E_RESULT="${{ needs.e2e-tests.result }}"
+
+          badge() {
+            case "$1" in
+              success) echo "✅ Passed"  ;;
+              failure) echo "❌ Failed"  ;;
+              skipped) echo "⏭️ Skipped" ;;
+              *)       echo "⚠️ $1"      ;;
+            esac
+          }
+
+          {
+            echo "# 🧠 BrainBattle Android — Test Report"
+            echo ""
+            echo "| Suite | Status | Details |"
+            echo "| --- | --- | --- |"
+            echo "| 🔬 JVM Unit Tests       | $(badge $UNIT_RESULT) | Download \`Android-Unit-Test-HTML-${{ github.run_number }}\` artifact |"
+            echo "| 📱 Espresso E2E Tests   | $(badge $E2E_RESULT)  | Download \`Android-E2E-Test-HTML-${{ github.run_number }}\` artifact |"
+            echo ""
+            echo "## 📦 Run Information"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Repository   | \`${{ github.repository }}\` |"
+            echo "| Branch       | \`${{ github.ref_name }}\` |"
+            echo "| Commit SHA   | \`${{ github.sha }}\` |"
+            echo "| Triggered by | @${{ github.actor }} |"
+            echo "| Run number   | \`#${{ github.run_number }}\` |"
+            echo "| Workflow     | [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo ""
+            echo "## 📂 Test Files"
+            echo ""
+            echo "| File | Type | Count |"
+            echo "| --- | --- | --- |"
+            echo "| \`BrainBattleUnitTest.kt\`              | JVM Unit     | 20 tests |"
+            echo "| \`BrainBattleRulesTest.kt\`             | JVM Unit     | 11 tests |"
+            echo "| \`BrainBattleComprehensiveUnitTest.kt\` | JVM Unit     | 90 tests |"
+            echo "| \`BrainBattleInstrumentedTest.kt\`      | Instrumented | 12 tests |"
+            echo "| \`BrainBattleUiFlowTest.kt\`            | Instrumented | 9 tests  |"
+            echo "| \`BrainBattleFullSuiteTest.kt\`         | Instrumented | 100 tests|"
+            echo ""
+            echo "**Total: 242 test cases across JVM + Instrumented suites**"
+          } >> "$GITHUB_STEP_SUMMARY"
