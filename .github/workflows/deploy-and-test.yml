@@ -191,4 +191,9 @@ jobs:
       - name: 📝  Write Step Summary
         if: always()
         run: |
-          cat "${{ github.workspace }}/Test_Results/Summary/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          SUMMARY_FILE="${{ github.workspace }}/Test_Results/Summary/summary.md"
+          if [ -f "$SUMMARY_FILE" ]; then
+            cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ No summary file generated for this run." >> "$GITHUB_STEP_SUMMARY"
+          fi

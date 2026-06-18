@@ -56,9 +56,11 @@ jobs:
              echo "TECH=Generic" >> "$GITHUB_ENV"
           fi
           
-          # Execute security generator script
-          cd BrainBattleE2E
-          node ../BrainBattleBackend/scripts/generateSecuritySuite.js
+          # Run security generator script.
+          # NODE_PATH tells Node where to find shared node_modules (exceljs lives in BrainBattleE2E).
+          # The script itself uses __dirname-relative paths, so we run it from the workspace root.
+          NODE_PATH="${GITHUB_WORKSPACE}/BrainBattleE2E/node_modules" \
+            node BrainBattleBackend/scripts/generateSecuritySuite.js
 
       # ── 4. Upload Security Artifacts ─────────────────────────────
       - name: 📤  Upload Vulnerability Results
@@ -73,6 +75,15 @@ jobs:
       - name: 📝  Write Step Summary
         if: always()
         run: |
-          cat "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          cat "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" ]; then
+            cat "${{ github.workspace }}/Vulnerability_Test_Results/executive-summary.md" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ executive-summary.md was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -f "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" ]; then
+            cat "${{ github.workspace }}/Vulnerability_Test_Results/security-review.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ security-review.md was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
