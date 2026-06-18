@@ -13,6 +13,7 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.hamcrest.CoreMatchers.*
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +37,7 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-UI-003 | LoginActivity — All UI Elements Visible
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-UI-003 LoginActivity all UI elements visible`() {
+    @Test fun tcAUi003LoginActivityAllUiElementsVisible() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.emailEditText)).check(matches(isDisplayed()))
         onView(withId(R.id.passwordEditText)).check(matches(isDisplayed()))
@@ -48,40 +49,43 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-UI-004 | Login — Password Field is Masked
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-UI-004 login password field is masked`() {
-        ActivityScenario.launch(LoginActivity::class.java)
-        onView(withId(R.id.passwordEditText)).check(
-            matches(hasInputType(
+    @Test fun tcAUi004LoginPasswordFieldIsMasked() {
+        ActivityScenario.launch(LoginActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val password = activity.findViewById<EditText>(R.id.passwordEditText)
+                assertEquals(
                 android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            ))
-        )
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                    password.inputType
+                )
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-UI-005 | SignupActivity — All Fields Visible
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-UI-005 SignupActivity all fields visible`() {
+    @Test fun tcAUi005SignupActivityAllFieldsVisible() {
         ActivityScenario.launch(SignupActivity::class.java)
-        onView(withId(R.id.usernameEditText)).check(matches(isDisplayed()))
-        onView(withId(R.id.emailEditText)).check(matches(isDisplayed()))
-        onView(withId(R.id.passwordEditText)).check(matches(isDisplayed()))
-        onView(withId(R.id.signupButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.etUsername)).check(matches(isDisplayed()))
+        onView(withId(R.id.etEmail)).check(matches(isDisplayed()))
+        onView(withId(R.id.etPassword)).check(matches(isDisplayed()))
+        onView(withId(R.id.btnSignup)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-UI-022 | ForgotPasswordActivity — Email Input Visible
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-UI-022 ForgotPasswordActivity email input visible`() {
+    @Test fun tcAUi022ForgotPasswordActivityEmailInputVisible() {
         ActivityScenario.launch(ForgotPasswordActivity::class.java)
-        onView(withId(R.id.forgotEmailEditText)).check(matches(isDisplayed()))
-        onView(withId(R.id.verifyButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.emailEditText)).check(matches(isDisplayed()))
+        onView(withId(R.id.resetButton)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-001 | Login — Empty Email Shows Toast
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-001 login empty email shows validation toast`() {
+    @Test fun tcAV001LoginEmptyEmailShowsValidationToast() {
         ActivityScenario.launch(LoginActivity::class.java)
         // Leave email blank, fill only password
         onView(withId(R.id.passwordEditText)).perform(typeText("somepass"), closeSoftKeyboard())
@@ -93,7 +97,7 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-002 | Login — Empty Password Shows Toast
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-002 login empty password shows validation toast`() {
+    @Test fun tcAV002LoginEmptyPasswordShowsValidationToast() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.emailEditText)).perform(typeText(VALID_EMAIL), closeSoftKeyboard())
         onView(withId(R.id.loginButton)).perform(click())
@@ -103,7 +107,7 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-003 | Login — Both Fields Empty
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-003 login both empty stays on login`() {
+    @Test fun tcAV003LoginBothEmptyStaysOnLogin() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.loginButton)).perform(click())
         onView(withId(R.id.loginButton)).check(matches(isDisplayed()))
@@ -112,7 +116,7 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-004 | Login — Whitespace-Only Input
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-004 login whitespace only treated as empty`() {
+    @Test fun tcAV004LoginWhitespaceOnlyTreatedAsEmpty() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.emailEditText)).perform(typeText("   "), closeSoftKeyboard())
         onView(withId(R.id.passwordEditText)).perform(typeText("   "), closeSoftKeyboard())
@@ -123,52 +127,52 @@ class BrainBattleInstrumentedTest {
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-006 | Signup — Empty Username Validation
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-006 signup empty username validation`() {
+    @Test fun tcAV006SignupEmptyUsernameValidation() {
         ActivityScenario.launch(SignupActivity::class.java)
-        onView(withId(R.id.emailEditText)).perform(typeText("a@b.com"), closeSoftKeyboard())
-        onView(withId(R.id.passwordEditText)).perform(typeText("pass123"), closeSoftKeyboard())
-        onView(withId(R.id.signupButton)).perform(click())
-        onView(withId(R.id.signupButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.etEmail)).perform(typeText("a@b.com"), closeSoftKeyboard())
+        onView(withId(R.id.etPassword)).perform(typeText("pass123"), closeSoftKeyboard())
+        onView(withId(R.id.btnSignup)).perform(click())
+        onView(withId(R.id.btnSignup)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-007 | ForgotPassword — Empty Email Validation
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-007 forgot password empty email validation`() {
+    @Test fun tcAV007ForgotPasswordEmptyEmailValidation() {
         ActivityScenario.launch(ForgotPasswordActivity::class.java)
-        onView(withId(R.id.verifyButton)).perform(click())
-        onView(withId(R.id.verifyButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.resetButton)).perform(click())
+        onView(withId(R.id.resetButton)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-V-013 | ChangePassword — Empty Password Validation
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-V-013 change password empty field stays on screen`() {
+    @Test fun tcAV013ChangePasswordEmptyFieldStaysOnScreen() {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val intent = Intent(ctx, ChangePasswordActivity::class.java).apply {
             putExtra("email", VALID_EMAIL)
         }
         ActivityScenario.launch<ChangePasswordActivity>(intent)
-        onView(withId(R.id.submitButton)).perform(click())
-        onView(withId(R.id.submitButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.changeButton)).perform(click())
+        onView(withId(R.id.changeButton)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-F-005 | Navigate to SignupActivity from Login
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-F-005 login signup text opens signup activity`() {
+    @Test fun tcAF005LoginSignupTextOpensSignupActivity() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.signupText)).perform(click())
         // SignupActivity should be visible
-        onView(withId(R.id.signupButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.btnSignup)).check(matches(isDisplayed()))
     }
 
     // ══════════════════════════════════════════════════════════
     //  TC-A-F-006 | Navigate to ForgotPasswordActivity from Login
     // ══════════════════════════════════════════════════════════
-    @Test fun `TC-A-F-006 login forgot text opens forgot password activity`() {
+    @Test fun tcAF006LoginForgotTextOpensForgotPasswordActivity() {
         ActivityScenario.launch(LoginActivity::class.java)
         onView(withId(R.id.forgotText)).perform(click())
-        onView(withId(R.id.verifyButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.resetButton)).check(matches(isDisplayed()))
     }
 }
