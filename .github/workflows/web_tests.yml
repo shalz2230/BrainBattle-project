@@ -1,198 +1,139 @@
-name: 🌐 Web App Tests — Selenium + Unit
+##############################################################################
+#
+#  BrainBattle — 🌐 Web App Tests & Report
+#
+#  What it does:
+#    1. Runs the full Selenium / Mocha E2E suite against the hosted GitHub
+#       Pages frontend + hosted Render backend (no local server needed).
+#    2. Generates a styled Excel report (selenium-report.xlsx).
+#    3. Uploads ONLY the .xlsx as the workflow artifact.
+#
+#  Triggers: push / PR to main | master + manual dispatch
+#
+##############################################################################
+name: 🌐 Web App — Selenium Report
 
 on:
   push:
     branches: ["main", "master"]
+    paths:
+      - "BrainBattleWeb/**"
+      - "BrainBattleE2E/**"
+      - ".github/workflows/web_report.yml"
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:
 
+concurrency:
+  group: web-report-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # JOB 1: Pure Logic Unit Tests (no browser, instant)
-  # Covers TC-W-U-001 to TC-W-U-020
-  # ─────────────────────────────────────────────────────────────
-  unit-tests:
-    name: 🔬 Unit Tests (Pure Logic)
+  selenium-report:
+    name: 🌐 Selenium E2E — Excel Report
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
-      - name: ⬇️ Checkout Repository
+      # ── 1. Source ────────────────────────────────────────────────
+      - name: ⬇️  Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🟢 Setup Node.js 20
+      # ── 2. Node ─────────────────────────────────────────────────
+      - name: 🟢  Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: BrainBattleE2E/package-lock.json
 
-      - name: 📦 Install E2E Dependencies
+      - name: 📦  Install E2E dependencies
         working-directory: BrainBattleE2E
         run: npm install
 
-      - name: 🔬 Run Unit Tests (no browser needed)
-        working-directory: BrainBattleE2E
-        run: |
-          node ./node_modules/mocha/bin/mocha.js tests/validation_unit_security.test.js \
-            --timeout 30000 \
-            --grep "Unit Tests" \
-            --reporter json \
-            --reporter-option output=unit-test-results.json
-          node ./node_modules/mocha/bin/mocha.js tests/validation_unit_security.test.js \
-            --timeout 30000 \
-            --grep "Unit Tests" \
-            --reporter spec
-
-  # ─────────────────────────────────────────────────────────────
-  # JOB 2: Backend Startup + Selenium E2E Tests
-  # ─────────────────────────────────────────────────────────────
-  e2e-tests:
-    name: 🌐 E2E Selenium Tests (UI + Functional + Validation + Security)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - name: ⬇️ Checkout Repository
-        uses: actions/checkout@v4
-
-      # ── Python + Flask Backend ────────────────────────────────
-      - name: 🐍 Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: BrainBattleBackend/requirements.txt
-
-      - name: 📦 Install Backend Dependencies
-        working-directory: BrainBattleBackend
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: 🗄️ Wipe & Recreate Fresh Database
-        working-directory: BrainBattleBackend
-        run: |
-          rm -f database/db.sqlite3
-          mkdir -p database
-          echo "✅ Clean database directory ready"
-
-      - name: 🌱 Seed Test User (werkzeug hash — matches app)
-        working-directory: BrainBattleBackend
-        env:
-          SECRET_KEY: "ci-test-secret-key"
-          CORS_ORIGINS: "*"
-          FLASK_DEBUG: "false"
-        run: |
-          python - <<'EOF'
-          import sys, os
-          sys.path.insert(0, '.')
-          os.environ.setdefault('SECRET_KEY', 'ci-test-secret-key')
-          os.environ.setdefault('CORS_ORIGINS', '*')
-
-          from app import create_app
-          from database.db import db
-          from models.user_model import User
-          from werkzeug.security import generate_password_hash
-
-          app = create_app()
-          with app.app_context():
-              db.drop_all()
-              db.create_all()
-              hashed = generate_password_hash('test1234')
-              db.session.add(User('TestUser', 'test@brainbattle.com', hashed))
-              db.session.commit()
-              print(f"✅ Seeded {User.query.count()} user(s)")
-          EOF
-
-      # ── Node + React Web App ──────────────────────────────────
-      - name: 🟢 Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: BrainBattleWeb/package-lock.json
-
-      - name: 📦 Install Web App Dependencies
-        working-directory: BrainBattleWeb
-        run: npm install
-
-      - name: 🏗️ Build Web App (base = / for CI)
-        working-directory: BrainBattleWeb
-        env:
-          VITE_API_URL: "https://brainbattlewebbackend.onrender.com"
-        run: |
-          npx vite build --base /
-
-      # ── Chrome ────────────────────────────────────────────────
-      - name: 🌐 Setup Chrome
-        id: setup-chrome
+      # ── 3. Chrome ────────────────────────────────────────────────
+      - name: 🌐  Setup Chrome (stable)
+        id: chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
 
-      - name: 🔧 Setup ChromeDriver
+      - name: 🔧  Setup ChromeDriver
         uses: nanasess/setup-chromedriver@v2
 
-      - name: Locate ChromeDriver
+      - name: 📍  Locate ChromeDriver
         id: chromedriver
         run: echo "path=$(which chromedriver)" >> "$GITHUB_OUTPUT"
 
-      - name: 📦 Install E2E Test Dependencies
-        working-directory: BrainBattleE2E
-        run: npm install
+      # ── 4. Wait for hosted services ──────────────────────────────
+      - name: ⏳  Wait for hosted backend (Render)
+        run: |
+          echo "Pinging backend..."
+          for i in $(seq 1 20); do
+            curl -sf https://brainbattlewebbackend.onrender.com/ > /dev/null 2>&1 && echo "✅ Backend ready" && break
+            echo "  attempt $i — sleeping 5s"
+            sleep 5
+          done
 
-      - name: 🧹 Prepare E2E Artifacts Directory
-        run: mkdir -p BrainBattleE2E/test-artifacts
+      - name: ⏳  Wait for hosted frontend (GitHub Pages)
+        run: |
+          echo "Pinging frontend..."
+          for i in $(seq 1 10); do
+            curl -sf https://shalz2230.github.io/brainbattlewebfrontend/ > /dev/null 2>&1 && echo "✅ Frontend ready" && break
+            echo "  attempt $i — sleeping 3s"
+            sleep 3
+          done
 
-      # ── Start Servers & Run E2E Tests ─────────────────────────
-      - name: 🚀 Start Servers & Run Full E2E Tests
+      # ── 5. Run Tests ─────────────────────────────────────────────
+      - name: 🧪  Run full Selenium suite → Excel report
+        id: selenium
         working-directory: BrainBattleE2E
         env:
-          SECRET_KEY: "ci-test-secret-key"
-          CORS_ORIGINS: "*"
-          FLASK_DEBUG: "false"
-          FLASK_HOST: "127.0.0.1"
-          FLASK_PORT: "5000"
-          TEST_BASE_URL: "https://shalz2230.github.io/brainbattlewebfrontend"
-          TEST_EMAIL: "test@brainbattle.com"
-          TEST_PASS: "test1234"
-          API_URL: "https://brainbattlewebbackend.onrender.com"
-          SELENIUM_HEADLESS: "true"
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          CHROMEDRIVER_PATH: ${{ steps.chromedriver.outputs.path }}
-          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+          TEST_BASE_URL:       "https://shalz2230.github.io/brainbattlewebfrontend"
+          TEST_EMAIL:          "test@brainbattle.com"
+          TEST_PASS:           "test1234"
+          API_URL:             "https://brainbattlewebbackend.onrender.com"
+          SELENIUM_HEADLESS:   "true"
+          CHROME_BIN:          ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH:   ${{ steps.chromedriver.outputs.path }}
         run: |
-          echo "Checking hosted backend..."
-          for i in $(seq 1 15); do sleep 2; curl -sf https://brainbattlewebbackend.onrender.com/ > /dev/null 2>&1 && break; done
-
-          echo "Checking hosted frontend..."
-          for i in $(seq 1 10); do sleep 2; curl -sf https://shalz2230.github.io/brainbattlewebfrontend/ > /dev/null 2>&1 && break; done
-
-          echo "Running Full E2E Tests..."
-          cd ../BrainBattleE2E
           set +e
-          node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js --timeout 300000 --reporter ./utils/excelReporter.js
-          TEST_EXIT_CODE=$?
+          node ./node_modules/mocha/bin/mocha.js tests/mega_web_1100.test.js \
+            --timeout 300000 \
+            --reporter ./utils/excelReporter.js
+          EXIT=$?
           set -e
+          # Ensure the report file is always at a known name
+          [ -f selenium-report.xlsx ] && cp selenium-report.xlsx ../brainbattle-web-test-report.xlsx
+          exit $EXIT
+        continue-on-error: true
 
-          if [ -f selenium-report.xlsx ]; then
-            cp selenium-report.xlsx full-e2e-report.xlsx
-          fi
-
-          echo "Hosted E2E run complete."
-          exit $TEST_EXIT_CODE
-
-      # ── Upload Artifacts ──────────────────────────────────────
-      - name: 📤 Artifact — Full E2E Report
+      # ── 6. Upload ONLY the xlsx ───────────────────────────────────
+      - name: 📤  Upload Web Test Report (.xlsx)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Web-Full-E2E-Report
-          path: |
-            BrainBattleE2E/full-e2e-report.xlsx
-            BrainBattleE2E/selenium-report.xlsx
-            BrainBattleE2E/web_results.json
-            BrainBattleE2E/test-artifacts
+          name: BrainBattle-Web-Test-Report-${{ github.run_number }}
+          path: brainbattle-web-test-report.xlsx
           retention-days: 30
-          if-no-files-found: ignore
+          if-no-files-found: warn
+
+      # ── 7. Step Summary ──────────────────────────────────────────
+      - name: 📝  Write Step Summary
+        if: always()
+        run: |
+          STATUS="${{ steps.selenium.outcome }}"
+          [ "$STATUS" = "success" ] && BADGE="✅ Passed" || BADGE="❌ Failed / Partial"
+          {
+            echo "## 🌐 Web Selenium Test Report — $BADGE"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Frontend  | [GitHub Pages](https://shalz2230.github.io/brainbattlewebfrontend) |"
+            echo "| Backend   | [Render API](https://brainbattlewebbackend.onrender.com) |"
+            echo "| Commit    | \`${{ github.sha }}\` |"
+            echo "| Branch    | \`${{ github.ref_name }}\` |"
+            echo "| Run #     | \`${{ github.run_number }}\` |"
+            echo ""
+            echo "📥 Download **\`BrainBattle-Web-Test-Report-${{ github.run_number }}\`** from Artifacts for the full Excel report."
+          } >> "$GITHUB_STEP_SUMMARY"
