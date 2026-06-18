@@ -1,0 +1,45 @@
+name: 📈 API Load Test
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "BrainBattleBackend/**"
+      - ".github/workflows/load-test.yml"
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  load-test:
+    name: 📈 Run k6 Baseline Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── 1. Source ──────────────────────────────────────────────────────────
+      - name: ⬇️  Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node.js (for summary parser script) ───────────────────────
+      - name: 🟢  Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # ── 3. Setup k6 ────────────────────────────────────────────────────────
+      - name: 🛠️  Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      # ── 4. Run k6 Load Test ────────────────────────────────────────────────
+      - name: 📈  Run k6 Baseline Load Test
+        run: |
+          k6 run --summary-export=summary.json \
+            --env BACKEND_URL=https://brainbattlewebbackend.onrender.com/ \
+            BrainBattleBackend/scripts/load-test.js
+
+      # ── 5. Generate & Write Step Summary ──────────────────────────────────
+      - name: 📝  Generate Performance Step Summary
+        if: always()
+        run: |
+          node BrainBattleBackend/scripts/parseK6Summary.js

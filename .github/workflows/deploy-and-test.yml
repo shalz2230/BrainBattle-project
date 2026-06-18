@@ -151,15 +151,7 @@ jobs:
           exit $EXIT
         continue-on-error: true
 
-      # ── 9. k6 Load Tests ─────────────────────────────────────────────────
-      - name: 🛠️  Setup k6
-        uses: grafana/setup-k6-action@v1
 
-      - name: 📈  Run k6 Baseline Load Test
-        uses: grafana/run-k6-action@v1
-        with:
-          path: BrainBattleBackend/scripts/load-test.js
-          flags: --env BACKEND_URL=https://brainbattlewebbackend.onrender.com/
 
       # ── 10. Copy HTML reports into built dist for unified deployment ─────────
       - name: 📁  Inject E2E Reports into Build Dist
