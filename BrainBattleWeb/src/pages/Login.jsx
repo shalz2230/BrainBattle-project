@@ -18,6 +18,11 @@ export default function Login() {
       showToast('Enter email & password', 'error');
       return;
     }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      showToast('Invalid mail', 'error');
+      return;
+    }
     setLoading(true);
     try {
       const res = await loginApi(email.trim(), password.trim());

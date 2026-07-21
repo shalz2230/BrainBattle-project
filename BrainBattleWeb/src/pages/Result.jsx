@@ -85,6 +85,20 @@ export default function Result() {
             Home
           </button>
         </div>
+
+        {/* Parent Survey Link */}
+        <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px', width: '100%', textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', color: '#a0aec0', marginBottom: '8px' }}>
+            Parents: How did your child do?
+          </p>
+          <button 
+            className="neon-link" 
+            style={{ fontSize: '13px', border: 'none', background: 'none', cursor: 'pointer', outline: 'none', padding: '4px 8px' }}
+            onClick={() => navigate('/post-game-survey')}
+          >
+            📋 Share Feedback (1-Min Survey)
+          </button>
+        </div>
       </div>
     </div>
   );

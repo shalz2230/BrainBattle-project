@@ -35,6 +35,24 @@ export default function Home() {
           Hello, {dashboard?.username || 'Brainiac'}! 👋
         </p>
 
+        {/* Parent Survey Banner */}
+        <div className="glass-panel" style={{ padding: '16px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px dashed rgba(255, 0, 127, 0.4)' }}>
+          <h4 style={{ margin: 0, fontSize: '15px', color: '#ff007f', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            📋 Parent Questionnaire
+          </h4>
+          <p style={{ margin: 0, fontSize: '13px', color: '#a0aec0', lineHeight: '1.4' }}>
+            Help us understand your child's everyday cognitive play skills before starting the games.
+          </p>
+          <button 
+            className="game-btn-primary" 
+            style={{ width: 'fit-content', padding: '8px 16px', fontSize: '12px', marginTop: '6px', height: 'auto', minHeight: 'auto' }}
+            onClick={() => navigate('/pre-game-survey')}
+          >
+            <span className="btn-content">Start Pre-Game Survey</span>
+            <div className="btn-glare"></div>
+          </button>
+        </div>
+
         <div className="progress-card glass-panel">
           <p className="label">Total Stars</p>
           <p id="total-stars" className="level">⭐ {dashboard?.total_stars || 0}</p>

@@ -9,6 +9,8 @@ import Home          from './pages/Home';
 import Profile       from './pages/Profile';
 import GameLevels    from './pages/GameLevels';
 import Result        from './pages/Result';
+import PreGameSurvey from './pages/PreGameSurvey';
+import PostGameSurvey from './pages/PostGameSurvey';
 import MemoryGame    from './pages/games/MemoryGame';
 import LogicGame     from './pages/games/LogicGame';
 import SpeedGame     from './pages/games/SpeedGame';
@@ -29,6 +31,8 @@ function App() {
           {/* Main */}
           <Route path="/home"              element={<Home />} />
           <Route path="/profile"           element={<Profile />} />
+          <Route path="/pre-game-survey"   element={<PreGameSurvey />} />
+          <Route path="/post-game-survey"  element={<PostGameSurvey />} />
 
           {/* Level selectors */}
           <Route path="/game/:gameType"    element={<GameLevels />} />

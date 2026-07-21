@@ -17,6 +17,15 @@ export default function Signup() {
       showToast('Fill all fields', 'error');
       return;
     }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      showToast('Invalid mail', 'error');
+      return;
+    }
+    if (password.length <= 6) {
+      showToast('Password should be more than 6 characters', 'error');
+      return;
+    }
     setLoading(true);
     try {
       await signupApi(username.trim(), email.trim(), password.trim());

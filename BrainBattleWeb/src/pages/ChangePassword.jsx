@@ -18,6 +18,15 @@ export default function ChangePassword() {
       showToast('All fields required', 'error');
       return;
     }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      showToast('Invalid mail', 'error');
+      return;
+    }
+    if (password.length <= 6) {
+      showToast('Password should be more than 6 characters', 'error');
+      return;
+    }
     setLoading(true);
     try {
       const res = await changeApi(email.trim(), password.trim());
